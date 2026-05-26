@@ -2,9 +2,11 @@
 
 [![npm](https://img.shields.io/npm/v/geotab-smart-sdk?color=cb3837&logo=npm)](https://www.npmjs.com/package/geotab-smart-sdk)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A518-43853d?logo=node.js&logoColor=white)](#requirements)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-43853d?logo=node.js&logoColor=white)](#requirements)
+[![Tests](https://img.shields.io/badge/tests-43%20passing-43853d)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-78%25-d4a017)](#testing)
 [![Docs](https://img.shields.io/badge/docs-live-0F6E56)](https://kunalkamble.github.io/geotab-smart-sdk/)
-[![Deploy](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml)
+[![CI](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml)
 
 A smart, composable Node.js SDK for the [MyGeotab API](https://geotab.github.io/sdk/), built on top of [`mg-api-js`](https://www.npmjs.com/package/mg-api-js).
 
@@ -40,6 +42,7 @@ It ships use-case helpers (`liveTracker`, `history`, `fleetSnapshot`, `feeds`), 
 - [GetFeed: critical rules from Geotab docs](#getfeed-critical-rules-from-geotab-docs)
 - [Project structure](#project-structure)
 - [Requirements](#requirements)
+- [Testing](#testing)
 - [Examples](#examples)
 - [Roadmap](#roadmap)
 - [License](#license)
@@ -631,9 +634,43 @@ geotab-smart-sdk/
 
 ## Requirements
 
-- **Node.js ≥ 14**
+- **Node.js ≥ 20** (the SDK uses `node:test` and built-in coverage tooling that landed in 20)
 - A valid MyGeotab account (username, password, database)
 - For high-volume `GetFeed` usage, a **root-group service account** is strongly recommended
+
+---
+
+## Testing
+
+The SDK ships **43 unit tests** spread across five files (one per concern). They use Node 20's built-in test runner — **zero test-framework dependencies**.
+
+```bash
+npm test               # spec reporter, ~60 ms total
+npm run test:watch     # rerun on file change (dev mode)
+npm run test:coverage  # node:test built-in coverage report (line / branch / func)
+```
+
+Latest coverage (re-measured in CI on every push):
+
+| Metric | Coverage |
+|---|---|
+| Lines | **78%** |
+| Branches | **74%** |
+| Functions | **58%** |
+
+The function-coverage gap reflects code that's hard to unit-test offline — full poll loops, network retries, GetFeed token rotation in flight. Those paths are exercised indirectly via the `_merge` / `_assemble` output-processing tests added in 0.3.0.
+
+The test files mirror the SDK module layout:
+
+| File | Covers |
+|---|---|
+| `test/sdk.test.js` | `GeotabSDK` construction, options, lifecycle events, `getSession`, read-only mode, connect warm-ups |
+| `test/diagnostics.test.js` | `Diagnostics.*` constants, groups, labels |
+| `test/trackers.test.js` | `LiveTracker` + `RealtimeTracker` (both input shape and output processing) |
+| `test/queries.test.js` | `HistoryQuery` + `FleetSnapshot` (pagination edge cases, group filter pruning) |
+| `test/feeds.test.js` | `FeedManager` builder + version helpers |
+
+CI runs `npm run test:coverage` and `npm run lint` before deploying the docs site, so a regression in either blocks Pages from updating.
 
 ---
 

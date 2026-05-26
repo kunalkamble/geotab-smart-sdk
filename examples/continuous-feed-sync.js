@@ -10,7 +10,7 @@
  *  - Adaptive polling: immediate when full, backoff when empty
  */
 
-const { GeotabSDK, Diagnostics } = require('../src');
+const { GeotabSDK } = require('../src');
 const fs = require('fs');
 
 const TOKEN_FILE = './feed-tokens.json';
@@ -19,6 +19,7 @@ const sdk = new GeotabSDK({
   username: process.env.GEOTAB_USER,
   password: process.env.GEOTAB_PASS,
   database: process.env.GEOTAB_DB,
+  server:   process.env.GEOTAB_SERVER || 'my.geotab.com',
 });
 
 // ── Token persistence ─────────────────────────────────────────────────────

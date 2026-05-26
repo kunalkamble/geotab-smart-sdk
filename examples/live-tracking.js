@@ -32,6 +32,8 @@ async function main() {
       Diagnostics.ODOMETER,       // metres → divide by 1000 for km
     ])
     .withFaults()
+    // .forGroups(['groupCompanyId'])  // optional — scope to a group
+    // .forDevices(['b1', 'b2'])       // optional — narrow further (intersects)
     .pollEvery(5_000);            // 5 second polling interval
 
   tracker.on('update', (vehicles) => {
@@ -75,6 +77,12 @@ async function main() {
   });
 
   await tracker.start();
+
+  process.on('SIGINT', () => {
+    console.log('\nStopping tracker...');
+    tracker.stop();
+    process.exit(0);
+  });
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

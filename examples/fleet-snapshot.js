@@ -12,10 +12,13 @@ const sdk = new GeotabSDK({
   username: process.env.GEOTAB_USER,
   password: process.env.GEOTAB_PASS,
   database: process.env.GEOTAB_DB,
+  server:   process.env.GEOTAB_SERVER || 'my.geotab.com',
 });
 
 async function main() {
   console.log('Loading fleet dashboard...\n');
+  // Explicit connect so auth errors surface here rather than inside fleetSnapshot.
+  await sdk.connect({ cacheDevices: true });
 
   const fleet = await sdk.fleetSnapshot({
     include: {
@@ -28,6 +31,7 @@ async function main() {
       ],
       recentTrips: 3,         // last 3 trips per vehicle
     },
+    // groupIds: ['groupCompanyId'],   // optional — scope to specific groups
   });
 
   // ── Summary ───────────────────────────────────────────────────────────────

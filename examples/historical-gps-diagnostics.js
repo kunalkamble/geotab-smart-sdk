@@ -15,9 +15,13 @@ const sdk = new GeotabSDK({
   username: process.env.GEOTAB_USER,
   password: process.env.GEOTAB_PASS,
   database: process.env.GEOTAB_DB,
+  server:   process.env.GEOTAB_SERVER || 'my.geotab.com',
 });
 
 async function main() {
+  // Explicit connect so auth errors surface here rather than mid-query.
+  await sdk.connect();
+
   // ── Yesterday's full day ─────────────────────────────────────────────────
   const from = new Date();
   from.setHours(0, 0, 0, 0);
@@ -95,6 +99,17 @@ async function main() {
   for (const dh of fleetHistory) {
     console.log(`  Device ${dh.deviceId}: ${dh.gps.length} GPS pts, ${dh.faults.length} faults`);
   }
+
+  // ── Whole-group example ──────────────────────────────────────────────────
+  // historyByGroups resolves the group → device list internally, then fans
+  // out to historyMany. One Get(Device) call followed by N multiCalls.
+  //
+  // const groupHistory = await sdk.historyByGroups(['groupCompanyId'], {
+  //   from,
+  //   to,
+  //   include: { gps: true, faults: true },
+  // });
+  // console.log(`  Group: ${groupHistory.length} device(s) returned`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

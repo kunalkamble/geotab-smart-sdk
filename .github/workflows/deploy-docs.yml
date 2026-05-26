@@ -40,8 +40,11 @@ jobs:
       - name: Install SDK dependencies
         run: npm ci
 
-      - name: SDK smoke test
-        run: npm test
+      - name: SDK tests + coverage
+        run: npm run test:coverage
+
+      - name: SDK lint
+        run: npm run lint
 
       - name: Install docs dependencies
         working-directory: docs

@@ -40,6 +40,7 @@ async function main() {
     .withIgnition()
     .withDriverAttribution()
     .withFaults()
+    // .forGroups(['groupCompanyId'])  // optional — server-side + cache-based filter
     .pollEvery(5_000);
 
   tracker.on('update', vehicles => {
