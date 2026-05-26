@@ -1,6 +1,6 @@
 'use strict';
 
-const EventEmitter = require('events');
+const EventEmitter = require('../core/EventEmitter');
 
 const DEFAULT_POLL_MS = 5_000;
 

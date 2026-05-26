@@ -1,6 +1,6 @@
 'use strict';
 
-const EventEmitter = require('events');
+const EventEmitter = require('../core/EventEmitter');
 
 const DEFAULT_RESULTS_LIMIT = 50_000;
 const MIN_POLL_INTERVAL_MS  = 1_000;   // 1s — safe for 60/min limit

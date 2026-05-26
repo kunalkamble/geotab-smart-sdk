@@ -1,7 +1,7 @@
 'use strict';
 
 const GeotabApi = require('mg-api-js');
-const EventEmitter = require('events');
+const EventEmitter = require('./EventEmitter');
 
 /**
  * Session manages authentication against the MyGeotab API.
