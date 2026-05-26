@@ -175,6 +175,22 @@ body {
 }
 .app-topbar-link:hover { color: var(--color-text-primary); }
 
+/* Sponsor button — same shell, but coloured to read as a CTA. */
+button.app-topbar-link {
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.app-topbar-sponsor {
+  color: #e91e63 !important;        /* pink heart */
+  border-color: rgba(233, 30, 99, 0.25) !important;
+}
+.app-topbar-sponsor:hover {
+  color: #ff4081 !important;
+  border-color: rgba(255, 64, 129, 0.55) !important;
+  background: rgba(233, 30, 99, 0.06);
+}
+
 .app-body {
   display: flex;
   flex: 1;
@@ -474,9 +490,187 @@ body {
 }
 .footer-callout i { color: var(--accent-blue-fg); font-size: 16px; margin-top: 2px; flex-shrink: 0; }
 
+/* ─── Sponsor page ──────────────────────────────────────────────────────── */
+
+.page-sponsor { /* full width — hero centres itself, grids fill */ }
+
+.sponsor-hero {
+  text-align: center;
+  padding: 32px 16px 24px;
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--color-border-tertiary);
+}
+.sponsor-hero-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ff4081, #e91e63);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 24px rgba(233, 30, 99, 0.3);
+}
+.sponsor-hero-title {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px 0;
+  color: var(--color-text-primary);
+}
+.sponsor-hero-tagline {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+  margin: 0 auto 20px auto;
+  max-width: 620px;
+}
+.sponsor-hero-tagline a {
+  color: var(--accent-green-fg);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  border-bottom: 1px dashed var(--accent-green-border);
+}
+.sponsor-hero-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.sponsor-impact { margin-bottom: 32px; }
+.sponsor-impact h2,
+.sponsor-ways h2 {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0 0 14px 0;
+  color: var(--color-text-primary);
+}
+.sponsor-impact-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+.sponsor-impact-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-border-tertiary);
+  border-radius: 10px;
+}
+.sponsor-impact-list i {
+  color: var(--accent-green-fg);
+  font-size: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.sponsor-impact-list div {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+.sponsor-impact-list strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.sponsor-ways-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.sponsor-way {
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-tertiary);
+  border-radius: 12px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.sponsor-way:hover {
+  border-color: var(--accent-green-border);
+  transform: translateY(-1px);
+}
+.sponsor-way.primary {
+  border-color: rgba(233, 30, 99, 0.35);
+  background: linear-gradient(180deg, rgba(233, 30, 99, 0.05), transparent);
+}
+.sponsor-way.primary:hover { border-color: #e91e63; }
+.sponsor-way-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-border-tertiary);
+  color: var(--accent-green-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-bottom: 2px;
+}
+.sponsor-way.primary .sponsor-way-icon {
+  background: #e91e63;
+  border-color: #e91e63;
+  color: #fff;
+}
+.sponsor-way-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+.sponsor-way-desc {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+.sponsor-way-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  margin-top: 4px;
+}
+
+.sponsor-thanks {
+  display: flex;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-border-tertiary);
+  border-radius: 10px;
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+.sponsor-thanks i {
+  color: var(--accent-blue-fg);
+  font-size: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.sponsor-thanks strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
 /* ─── Guide (long-form prose reference) ─────────────────────────────────── */
 
-.page-guide { max-width: 880px; }
+.page-guide { /* full width — prose sections cap themselves below */ }
 
 .guide-toc {
   display: flex;
@@ -507,6 +701,8 @@ body {
 .guide-section {
   margin-bottom: 36px;
   scroll-margin-top: calc(var(--topbar-height) + 16px);
+  /* Section is full-width — paragraphs and lists cap themselves for
+     readability, but code blocks and tables can grow wider. */
 }
 .guide-section h2 {
   font-size: 22px;
@@ -514,12 +710,14 @@ body {
   letter-spacing: -0.01em;
   margin: 0 0 12px 0;
   color: var(--color-text-primary);
+  max-width: 880px;
 }
 .guide-section p {
   font-size: 14.5px;
   line-height: 1.7;
   color: var(--color-text-secondary);
   margin: 0 0 12px 0;
+  max-width: 880px;
 }
 .guide-section p code,
 .guide-section li code,
@@ -538,6 +736,7 @@ body {
   color: var(--color-text-secondary);
   padding-left: 22px;
   margin: 0 0 12px 0;
+  max-width: 880px;
 }
 .guide-section li { margin-bottom: 6px; }
 

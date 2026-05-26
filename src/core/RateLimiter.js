@@ -103,9 +103,12 @@ class RateLimiter {
   }
 
   _parseRetryAfter(err) {
-    // mg-api-js may surface Retry-After from response headers
-    if (err.retryAfter) {
-      return parseInt(err.retryAfter, 10) * 1000;
+    // mg-api-js may surface Retry-After from response headers. Use a null
+    // check (not truthiness) so a legitimate `0` — meaning "retry immediately"
+    // per RFC 7231 — doesn't fall through to the 60-second default below.
+    if (err.retryAfter != null) {
+      const parsed = parseInt(err.retryAfter, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) return parsed * 1000;
     }
 
     // Fallback: extract from error message "Maximum admitted N per Xm"

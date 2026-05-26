@@ -7,6 +7,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-84%25-97ca00)](https://kunalkamble.github.io/geotab-smart-sdk/#/guide)
 [![Docs](https://img.shields.io/badge/docs-live-0F6E56)](https://kunalkamble.github.io/geotab-smart-sdk/)
 [![CI](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-e91e63?logo=github-sponsors&logoColor=white)](https://github.com/sponsors/kunalkamble)
 
 A smart, composable Node.js SDK for the [MyGeotab API](https://geotab.github.io/sdk/), built on top of [`mg-api-js`](https://www.npmjs.com/package/mg-api-js). Adaptive feeds, named diagnostics, two complementary trackers, group filtering, and a sandboxed playground — without locking you out of raw `call()` / `multiCall()`.
 
@@ -118,6 +119,12 @@ npm run test:coverage  # 84% lines, 81% branches, 76% functions
 ```
 
 87 tests across 8 files using Node 20's built-in test runner — zero test-framework dependencies. CI gates the docs deploy on tests + lint.
+
+---
+
+## Sponsor
+
+If this SDK has saved you time, consider [sponsoring on GitHub](https://github.com/sponsors/kunalkamble) — open source, MIT licensed, maintained on personal time. A star on the repo is honestly just as appreciated. See the [Sponsor page](https://kunalkamble.github.io/geotab-smart-sdk/#/sponsor) for ways to help.
 
 ---
 

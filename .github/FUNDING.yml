@@ -1,0 +1,4 @@
+# Powers the "Sponsor" button GitHub renders at the top of the repo page.
+# Multiple destinations are supported; today this points at the maintainer's
+# GitHub Sponsors profile.
+github: [kunalkamble]

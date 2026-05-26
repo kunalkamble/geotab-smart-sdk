@@ -29,6 +29,25 @@ test('registerLimit() reads err.retryAfter (seconds) when present', () => {
   assert.equal(entry.retryAfterMs, 5000);
 });
 
+test('registerLimit() treats retryAfter: 0 as 0 ms (not the 60s fallback)', () => {
+  // Per RFC 7231 a Retry-After of 0 means "you can retry immediately".
+  // The earlier truthiness check fell through to the 60s default for `0`,
+  // making "retry now" tests sit on a real 60-second wait. Guard that.
+  const rl = new RateLimiter();
+  rl.registerLimit('Device', { retryAfter: 0 });
+  assert.equal(rl._blocked.get('Device').retryAfterMs, 0);
+  assert.equal(rl.waitTime('Device'), 0);
+});
+
+test('registerLimit() ignores garbage retryAfter and uses the message regex / default', () => {
+  const rl = new RateLimiter();
+  rl.registerLimit('Device', { retryAfter: 'soon', message: 'unrelated' });
+  assert.equal(rl._blocked.get('Device').retryAfterMs, 60_000);
+
+  rl.registerLimit('FaultData', { retryAfter: -5, message: 'unrelated' });
+  assert.equal(rl._blocked.get('FaultData').retryAfterMs, 60_000);
+});
+
 test('registerLimit() parses "per Nm" / "per Ns" from the error message', () => {
   const rl = new RateLimiter();
   rl.registerLimit('LogRecord', { message: 'OverLimitException: Maximum admitted 60 per 1m' });
@@ -107,7 +126,14 @@ test('withRetry() re-throws non-rate-limit errors without retrying', async () =>
 
 test('withRetry() clears the block on success', async () => {
   const rl = new RateLimiter();
-  rl.registerLimit('Device', { retryAfter: 0 });   // pre-registered, will pass through
+  // retryAfter: 0 means "retry immediately" — the limiter registers the block
+  // but waitTime is 0, so withRetry proceeds without sleeping.
+  rl.registerLimit('Device', { retryAfter: 0 });
+  assert.equal(rl.waitTime('Device'), 0);
+
   await rl.withRetry('Device', async () => 'ok');
-  assert.equal(rl.waitTime('Device'), 0, 'block should be cleared after success');
+
+  // The clear() call on success removes the entry entirely, not just expires it.
+  assert.equal(rl._blocked.has('Device'), false, 'block entry should be removed by clear()');
+  assert.equal(rl.waitTime('Device'), 0);
 });

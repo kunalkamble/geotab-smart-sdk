@@ -3,6 +3,7 @@ import Home from './pages/Home.jsx';
 import Guide from './pages/Guide.jsx';
 import Compare from './pages/Compare.jsx';
 import Playground from './pages/Playground.jsx';
+import Sponsor from './pages/Sponsor.jsx';
 import GeotabSmartSdkInspector from './geotab-smart-sdk-inspector.jsx';
 import GeotabApiInspector from './geotab-api-inspector.jsx';
 
@@ -42,6 +43,12 @@ const ROUTES = [
     title: 'Playground',
     description: 'Exercise the SDK against your fleet — table or interactive map',
     Component: Playground,
+  },
+  {
+    id: 'sponsor', label: 'Sponsor', icon: 'ti-heart',
+    title: 'Support geotab-smart-sdk',
+    description: 'Open source, MIT licensed — sponsorship keeps fixes and features flowing',
+    Component: Sponsor,
   },
 ];
 
@@ -123,6 +130,15 @@ export default function App() {
           <div className="app-topbar-title">{active.title}</div>
           <div className="app-topbar-description">{active.description}</div>
         </div>
+        <button
+          className="app-topbar-link app-topbar-sponsor"
+          onClick={() => go('sponsor')}
+          aria-label="Support this project"
+          title="Support this project"
+        >
+          <i className="ti ti-heart" aria-hidden="true" />
+          <span className="app-topbar-link-text">Sponsor</span>
+        </button>
         <a
           className="app-topbar-link"
           href="https://github.com/kunalkamble/geotab-smart-sdk"
