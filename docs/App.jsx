@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Home from './pages/Home.jsx';
+import Guide from './pages/Guide.jsx';
 import Compare from './pages/Compare.jsx';
 import Playground from './pages/Playground.jsx';
 import GeotabSmartSdkInspector from './geotab-smart-sdk-inspector.jsx';
@@ -11,6 +12,12 @@ const ROUTES = [
     title: 'geotab-smart-sdk',
     description: 'Smart, composable Node.js SDK for the MyGeotab API',
     Component: Home,
+  },
+  {
+    id: 'guide', label: 'Guide', icon: 'ti-book-2',
+    title: 'Guide',
+    description: 'Prose reference: setup, sessions, group filtering, errors, GetFeed rules',
+    Component: Guide,
   },
   {
     id: 'compare', label: 'Compare', icon: 'ti-arrows-right-left',
@@ -40,16 +47,24 @@ const ROUTES = [
 
 const DEFAULT_ROUTE = 'home';
 
+// Route hashes look like `#/playground`. In-page anchors like `#install`
+// (used by Guide's TOC) are NOT routes — they should leave the current
+// route alone and just let the browser scroll. Returning `null` from
+// parseRoute means "don't change route."
+function parseRoute() {
+  const hash = window.location.hash;
+  if (!hash.startsWith('#/')) return null;
+  const id = hash.slice(2);
+  return ROUTES.find(r => r.id === id) ? id : DEFAULT_ROUTE;
+}
+
 function useHashRoute() {
-  const [route, setRoute] = useState(() => {
-    const h = window.location.hash.replace(/^#\/?/, '');
-    return ROUTES.find(r => r.id === h) ? h : DEFAULT_ROUTE;
-  });
+  const [route, setRoute] = useState(() => parseRoute() ?? DEFAULT_ROUTE);
 
   useEffect(() => {
     const onHashChange = () => {
-      const h = window.location.hash.replace(/^#\/?/, '');
-      setRoute(ROUTES.find(r => r.id === h) ? h : DEFAULT_ROUTE);
+      const next = parseRoute();
+      if (next !== null) setRoute(next);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);

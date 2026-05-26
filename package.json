@@ -8,9 +8,9 @@
     "examples"
   ],
   "scripts": {
-    "test": "node --test --test-reporter=spec test/sdk.test.js test/diagnostics.test.js test/trackers.test.js test/queries.test.js test/feeds.test.js",
-    "test:watch": "node --test --watch test/sdk.test.js test/diagnostics.test.js test/trackers.test.js test/queries.test.js test/feeds.test.js",
-    "test:coverage": "node --test --experimental-test-coverage test/sdk.test.js test/diagnostics.test.js test/trackers.test.js test/queries.test.js test/feeds.test.js",
+    "test": "node --test --test-reporter=spec test/sdk.test.js test/diagnostics.test.js test/event-emitter.test.js test/entity-cache.test.js test/rate-limiter.test.js test/trackers.test.js test/queries.test.js test/feeds.test.js",
+    "test:watch": "node --test --watch test/sdk.test.js test/diagnostics.test.js test/event-emitter.test.js test/entity-cache.test.js test/rate-limiter.test.js test/trackers.test.js test/queries.test.js test/feeds.test.js",
+    "test:coverage": "node --test --experimental-test-coverage test/sdk.test.js test/diagnostics.test.js test/event-emitter.test.js test/entity-cache.test.js test/rate-limiter.test.js test/trackers.test.js test/queries.test.js test/feeds.test.js",
     "lint": "eslint src/",
     "release": "node scripts/release.js"
   },
