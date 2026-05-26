@@ -193,6 +193,60 @@ check('HistoryQuery rejects missing required args', async () => {
   await assert.rejects(() => instance.history({ deviceId: 'b1' }), /from/i);
 });
 
+check('historyByGroups exists and validates input', async () => {
+  assert.equal(typeof instance.historyByGroups, 'function');
+  await assert.rejects(
+    () => instance.historyByGroups([], { from: new Date(), to: new Date() }),
+    /groupIds/i,
+  );
+  await assert.rejects(
+    () => instance.historyByGroups(['groupCompanyId'], {}),
+    /from|to/i,
+  );
+});
+
+check('historyByGroups resolves groups → devices, then fans out to historyMany', async () => {
+  const seen = { deviceQuery: null, multiCalls: [] };
+  const fakeSession = {
+    call: async (method, params) => {
+      if (params.typeName === 'Device') {
+        seen.deviceQuery = params;
+        return [{ id: 'b1' }, { id: 'b2' }];
+      }
+      throw new Error('unexpected call: ' + params.typeName);
+    },
+    multiCall: async (calls) => {
+      seen.multiCalls.push(calls);
+      return calls.map(() => []);
+    },
+  };
+
+  const hq = new sdk.HistoryQuery(fakeSession, {});
+  const result = await hq.fetchByGroups(['groupCompanyId'], {
+    from: new Date('2024-01-15T00:00:00Z'),
+    to:   new Date('2024-01-16T00:00:00Z'),
+    include: { gps: true },
+  });
+
+  assert.deepEqual(seen.deviceQuery.search.groups, [{ id: 'groupCompanyId' }]);
+  assert.equal(seen.multiCalls.length, 2,         'one multiCall per resolved device');
+  assert.equal(result.length, 2);
+  assert.equal(result[0].deviceId, 'b1');
+  assert.equal(result[1].deviceId, 'b2');
+});
+
+check('historyByGroups returns [] when group has no devices', async () => {
+  const fakeSession = {
+    call: async () => [],
+    multiCall: async () => { throw new Error('multiCall should not run for empty groups'); },
+  };
+  const hq = new sdk.HistoryQuery(fakeSession, {});
+  const result = await hq.fetchByGroups(['groupCompanyId'], {
+    from: new Date(), to: new Date(),
+  });
+  assert.deepEqual(result, []);
+});
+
 check('FleetSnapshot.groupIds propagates to every entity call', async () => {
   let captured = null;
   const fakeSession = {

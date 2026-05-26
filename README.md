@@ -371,6 +371,7 @@ DiagnosticLabels['DiagnosticFuelLevelId'];  // 'fuel level'
 | `realtimeTracker()` | `RealtimeTracker` | LogRecord-based, high-fidelity tracker — see [§1b](#1b-sdkrealtimetracker--logrecord-every-device-fix). |
 | `history(options)` | `Promise<HistoryResult>` | See [§2](#2-historical-gps--diagnostics--faults). |
 | `historyMany(deviceIds, options)` | `Promise<HistoryResult[]>` | Parallel fetch. |
+| `historyByGroups(groupIds, options)` | `Promise<HistoryResult[]>` | Resolves groups → devices, delegates to `historyMany`. |
 | `fleetSnapshot(options)` | `Promise<FleetSnapshotResult>` | See [§3](#3-fleet-snapshot-dashboard-load). |
 | `feeds()` | `FeedManager` | See [§4](#4-continuous-data-sync-via-getfeed). |
 
@@ -450,7 +451,8 @@ The Geotab API supports group-based filtering on every entity that has a device 
 | `sdk.liveTracker()` | ✓ `.forGroups([ids])` | Server-side group filter applied to `DeviceStatusInfo`, `StatusData`, and `FaultData`. Composable with `.forDevices()` — both intersect. |
 | `sdk.realtimeTracker()` | ✓ `.forGroups([ids])` | Server-side filter on `StatusData`, `FaultData`, and `DriverChange`. `LogRecord` (GetFeed) is filtered client-side via the device cache — unknown-to-cache devices are dropped. |
 | `sdk.history({ deviceId })` | N/A | Single device by ID. |
-| `sdk.historyMany([ids], options)` | Workaround | Pre-resolve device IDs and pass them in. A `historyByGroups()` helper is planned. |
+| `sdk.historyMany([ids], options)` | Workaround | Pre-resolve device IDs and pass them in. |
+| `sdk.historyByGroups([groupIds], options)` | ✓ Native | Resolves the groups to device IDs (one `Get(Device)` call), then fans out to `historyMany`. Returns `[]` if no devices match. |
 | `sdk.feeds()` (GetFeed) | Not supported | GetFeed accepts only `fromDate` per [Geotab's data feed guide](https://geotab.github.io/sdk/software/guides/data-feed/). Filter client-side via the device cache. |
 | `sdk.connect({ cacheDevices })` | Not yet | Caches all devices. A `cacheGroups: [ids]` scoping option is planned. |
 

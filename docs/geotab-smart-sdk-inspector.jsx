@@ -143,21 +143,23 @@ tracker.stop();`,
   {
     id: "history", label: "Historical query", icon: "ti-route",
     tagline: "GPS + diagnostics + faults + trips — composed, auto-paginated",
-    primaryObject: "HistoryQuery", method: "sdk.history() / sdk.historyMany()",
+    primaryObject: "HistoryQuery", method: "sdk.history() / .historyMany() / .historyByGroups()",
     accentColor: "var(--accent-blue-fg)", accentBg: "var(--accent-blue-bg)", accentBorder: "var(--accent-blue-border)",
     fields: [
-      { name: "deviceId", highlight: false, note: "Geotab device ID" },
+      { name: "deviceId", highlight: false, note: "Geotab device ID (sdk.history only)" },
       { name: "from / to", highlight: false, note: "Date objects bounding the time range" },
       { name: "include.gps", highlight: false, note: "LogRecord GPS trail (default true)" },
       { name: "include.trips", highlight: false, note: "Completed Trip records" },
       { name: "include.faults", highlight: false, note: "FaultData for the window" },
       { name: "include.diagnostics", highlight: false, note: "Array of Diagnostics.* IDs — StatusData per type" },
       { name: "computeBearing", highlight: true, note: "Add bearing to GPS points (LogRecord lacks it natively)" },
+      { name: "historyByGroups([ids], options)", highlight: true, note: "Resolves groups → device IDs (one Get(Device)), then delegates to historyMany." },
     ],
     gotchas: [
       { type: "tip",  text: "Everything is fetched in a single multiCall, then aligned for you." },
       { type: "info", text: "GPS is auto-paginated when the result hits the 50,000 limit. No manual paging code." },
       { type: "tip",  text: "Use historyMany([ids], options) for multiple devices in parallel — each gets its own multiCall." },
+      { type: "warn", text: "historyByGroups fans out one multiCall per device. Large groups (hundreds of devices) produce wide parallel fan-out — chunk the device list yourself if needed." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
 const sdk = new GeotabSDK({ /* ... */ });
@@ -182,6 +184,11 @@ data.diagnostics[Diagnostics.FUEL_LEVEL]; // StatusData[]
 
 // Parallel across vehicles
 const results = await sdk.historyMany(['b1', 'b2', 'b3'], {
+  from, to, include: { gps: true, faults: true },
+});
+
+// Or: every device in a group, resolved automatically
+const groupResults = await sdk.historyByGroups(['groupCompanyId'], {
   from, to, include: { gps: true, faults: true },
 });`,
   },
@@ -485,7 +492,7 @@ const HELPER_MATRIX = [
   { capability: "Trips",                    liveTracker: "—",                     realtimeTracker: "—",                     history: "include.trips",           fleetSnapshot: "recentTrips",   feeds: "Trip" },
   { capability: "Fleet summary counts",     liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "✓ .summary",    feeds: "—" },
   { capability: "Continuous sync",          liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "—",             feeds: "✓ adaptive" },
-  { capability: "Filter by group",          liveTracker: "✓ .forGroups()",        realtimeTracker: "✓ .forGroups()",        history: "via historyMany",         fleetSnapshot: "✓ groupIds",    feeds: "—" },
+  { capability: "Filter by group",          liveTracker: "✓ .forGroups()",        realtimeTracker: "✓ .forGroups()",        history: "✓ historyByGroups()",     fleetSnapshot: "✓ groupIds",    feeds: "—" },
   { capability: "Device names hydrated",    liveTracker: "✓",                     realtimeTracker: "✓",                     history: "—",                       fleetSnapshot: "via cache",     feeds: "—" },
   { capability: "Connectivity state",       liveTracker: "✓ isConnected",         realtimeTracker: "✓ from recency",        history: "—",                       fleetSnapshot: "✓ summary",     feeds: "—" },
 ];
@@ -553,7 +560,8 @@ tracker.stop();
 });
 // → { deviceId, period, gps, trips, faults, diagnostics:{ [id]: StatusData[] } }
 
-const results = await sdk.historyMany([ids], options);`,
+const results = await sdk.historyMany([ids], options);
+const groupResults = await sdk.historyByGroups([groupIds], options);`,
   },
   {
     title: "Fleet snapshot",
@@ -598,7 +606,8 @@ Surface:
 - sdk.liveTracker() — DeviceStatusInfo-based. Fluent: .withDiagnostics([ids]), .withFaults(), .forDevices([ids]), .pollEvery(ms), .start(), .stop(). Events: 'update' (vehicles), 'error' (err). Each poll is a single multiCall. Use for dashboards / one-snapshot-per-vehicle.
 - sdk.realtimeTracker() — LogRecord (GetFeed)-based. Same fluent surface plus .withIgnition(), .withDriverAttribution(), .drivingSpeedThreshold(kmh), .startingFrom(date). Default pollEvery(5000); hard floor 1000ms; soft warning < 2000ms. Bearing computed via atan2 between consecutive LogRecord points (null on the first observation per device, holds steady when stationary). isDriving = ignition-on AND speed > threshold (or speed-only if ignition unknown). Driver field tracked via DriverChange (type 'Driver'). Use for high-fidelity / every-fix tracking.
 - sdk.history({ deviceId, from, to, include: { gps?, trips?, faults?, diagnostics?: [ids] }, computeBearing? }) — single multiCall, auto-paginated GPS.
-- sdk.historyMany([ids], options) — parallel.
+- sdk.historyMany([ids], options) — parallel across explicit device IDs.
+- sdk.historyByGroups([groupIds], options) — resolves groups → devices via one Get(Device), then fans out to historyMany. Returns [] when no devices match.
 - sdk.fleetSnapshot({ include: { devices?, liveStatus?, activeFaults?, diagnostics?: [ids], recentTrips?: N }, groupIds? }) — returns Maps + pre-computed summary.
 - sdk.feeds() — FeedManager. .addFeed(type, { fromVersion?, fromDate?, resultsLimit?, search? }). Events: 'version' (fires BEFORE 'data' — persist tokens first), 'data', 'error'. .setVersion / .getVersion / .start / .stop.
 - Diagnostics.*: FUEL_LEVEL, ODOMETER, ENGINE_HOURS, ENGINE_RPM, ENGINE_SPEED, AUX_INPUT_1..6, FUEL_RATE, BATTERY_VOLTAGE, COOLANT_TEMP, OIL_TEMP, OIL_PRESSURE, EV_STATE_OF_CHARGE, EV_BATTERY_TEMP, HARSH_BRAKING, HARSH_ACCEL, SEAT_BELT, THROTTLE_POSITION, ENGINE_LOAD, IGNITION.

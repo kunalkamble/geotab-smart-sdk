@@ -139,6 +139,34 @@ class HistoryQuery {
     return Promise.all(deviceIds.map(id => this.fetch({ ...options, deviceId: id })));
   }
 
+  /**
+   * Fetch history for every device in one or more groups.
+   * Issues a single Get(Device) with the groups filter to resolve the device
+   * list, then delegates to fetchMany() — one multiCall per resolved device,
+   * in parallel.
+   *
+   * @param {string[]} groupIds   Geotab group IDs (must be non-empty)
+   * @param {object}   options    Same as fetch() minus deviceId
+   * @returns {Promise<HistoryResult[]>}  Empty array if no devices match.
+   */
+  async fetchByGroups(groupIds, options) {
+    if (!Array.isArray(groupIds) || groupIds.length === 0) {
+      throw new Error('[HistoryQuery] groupIds is required and must be non-empty');
+    }
+    if (!options || !options.from || !options.to) {
+      throw new Error('[HistoryQuery] options.from and options.to are required');
+    }
+
+    const devices = await this._session.call('Get', {
+      typeName: 'Device',
+      search: { groups: groupIds.map(id => ({ id })) },
+    });
+    const deviceIds = (devices || []).map(d => d.id).filter(Boolean);
+    if (deviceIds.length === 0) return [];
+
+    return this.fetchMany(deviceIds, options);
+  }
+
   // ─── Private ─────────────────────────────────────────────────────────────
 
   _buildCalls({ devSearch, gps, trips, faults, diagnostics }) {

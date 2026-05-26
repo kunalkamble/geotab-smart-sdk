@@ -181,6 +181,32 @@ class GeotabSDK {
   }
 
   /**
+   * Fetch historical data for every device in one or more groups.
+   *
+   * Resolves the groups to a device list via a single Get(Device) call, then
+   * delegates to historyMany() — one multiCall per resolved device, in parallel.
+   * Returns an empty array if the groups contain no devices.
+   *
+   * Be mindful: large groups produce large parallel fan-outs. The internal
+   * RateLimiter wraps each per-device multiCall, but if you expect hundreds
+   * of devices in one group, prefer chunking the device list yourself via
+   * sdk.call('Get', { typeName: 'Device', ... }) → batched historyMany() calls.
+   *
+   * @param {string[]} groupIds   Non-empty array of Geotab group IDs
+   * @param {object}   options    Same as history() minus deviceId
+   * @returns {Promise<HistoryResult[]>}
+   *
+   * @example
+   * const results = await sdk.historyByGroups(['groupCompanyId'], {
+   *   from: yesterday, to: today,
+   *   include: { gps: true, faults: true },
+   * });
+   */
+  historyByGroups(groupIds, options) {
+    return new HistoryQuery(this._session, this._rateLimiter).fetchByGroups(groupIds, options);
+  }
+
+  /**
    * Fetch a point-in-time snapshot of the entire fleet via multiCall.
    *
    * @param {object}   [options]
