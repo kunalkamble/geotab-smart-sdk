@@ -446,7 +446,7 @@ The Geotab API supports group-based filtering on every entity that has a device 
 
 | Helper | Group filter today | Status |
 |---|---|---|
-| `sdk.fleetSnapshot({ groupIds })` | Partial | Applied to `Device` and `DeviceStatusInfo` only. `StatusData`, `FaultData`, and `Trip` are fetched fleet-wide and keyed back to filtered devices on the client — correct but over-fetches. |
+| `sdk.fleetSnapshot({ groupIds })` | ✓ Full | Applied to every entity in the snapshot: `Device` / `DeviceStatusInfo` (top-level `groups`) and `StatusData` / `FaultData` / `Trip` (nested `deviceSearch.groups`). |
 | `sdk.liveTracker()` | Workaround | No `.forGroups()` yet. Pre-resolve device IDs and use `.forDevices([ids])`. |
 | `sdk.realtimeTracker()` | Workaround | Same — pre-resolve and use `.forDevices([ids])`. |
 | `sdk.history({ deviceId })` | N/A | Single device by ID. |

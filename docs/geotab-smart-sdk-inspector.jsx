@@ -191,7 +191,7 @@ const results = await sdk.historyMany(['b1', 'b2', 'b3'], {
       { name: "include.activeFaults", highlight: false, note: "Active DTCs per vehicle" },
       { name: "include.diagnostics", highlight: false, note: "Latest StatusData per Diagnostic ID per vehicle" },
       { name: "include.recentTrips", highlight: false, note: "N most recent trips per vehicle (last 7 days)" },
-      { name: "groupIds", highlight: false, note: "Partial today: filters Device + liveStatus only. activeFaults / diagnostics / recentTrips fetch fleet-wide and key back client-side." },
+      { name: "groupIds", highlight: true, note: "Optional. Filters every entity in the snapshot — Device, DeviceStatusInfo, StatusData, FaultData, Trip." },
       { name: ".summary", highlight: true, note: "Pre-computed counts: total / driving / stopped / disconnected / withActiveFaults" },
     ],
     gotchas: [
@@ -480,7 +480,7 @@ const HELPER_MATRIX = [
   { capability: "Trips",                    liveTracker: "—",                     realtimeTracker: "—",                     history: "include.trips",           fleetSnapshot: "recentTrips",   feeds: "Trip" },
   { capability: "Fleet summary counts",     liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "✓ .summary",    feeds: "—" },
   { capability: "Continuous sync",          liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "—",             feeds: "✓ adaptive" },
-  { capability: "Filter by group",          liveTracker: "via forDevices",        realtimeTracker: "via forDevices",        history: "via historyMany",         fleetSnapshot: "groupIds (partial)", feeds: "—" },
+  { capability: "Filter by group",          liveTracker: "via forDevices",        realtimeTracker: "via forDevices",        history: "via historyMany",         fleetSnapshot: "✓ groupIds",    feeds: "—" },
   { capability: "Device names hydrated",    liveTracker: "✓",                     realtimeTracker: "✓",                     history: "—",                       fleetSnapshot: "via cache",     feeds: "—" },
   { capability: "Connectivity state",       liveTracker: "✓ isConnected",         realtimeTracker: "✓ from recency",        history: "—",                       fleetSnapshot: "✓ summary",     feeds: "—" },
 ];

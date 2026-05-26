@@ -75,30 +75,33 @@ class FleetSnapshot {
       recentTrips  = 0,
     } = include;
 
+    // Geotab uses two different shapes for the group filter:
+    //   - Device, DeviceStatusInfo:           search.groups
+    //   - StatusData, FaultData, Trip, etc.:  search.deviceSearch.groups
+    // We pre-compute both forms once so each call site stays terse.
+    const hasGroups   = groupIds.length > 0;
+    const groupRefs   = hasGroups ? groupIds.map(id => ({ id })) : null;
+    const groupTop    = hasGroups ? { groups: groupRefs } : {};
+    const groupNested = hasGroups ? { deviceSearch: { groups: groupRefs } } : {};
+
     const calls   = [];
     const callMap = {};  // index → what the result represents
     let idx = 0;
 
     if (devices) {
-      const search = groupIds.length
-        ? { groups: groupIds.map(id => ({ id })) }
-        : {};
-      calls.push(['Get', { typeName: 'Device', search }]);
+      calls.push(['Get', { typeName: 'Device', search: { ...groupTop } }]);
       callMap[idx++] = 'devices';
     }
 
     if (liveStatus) {
-      const search = groupIds.length
-        ? { groups: groupIds.map(id => ({ id })) }
-        : {};
-      calls.push(['Get', { typeName: 'DeviceStatusInfo', search }]);
+      calls.push(['Get', { typeName: 'DeviceStatusInfo', search: { ...groupTop } }]);
       callMap[idx++] = 'liveStatus';
     }
 
     for (const diagId of diagnostics) {
       calls.push(['Get', {
         typeName: 'StatusData',
-        search: { diagnosticSearch: { id: diagId } },
+        search: { ...groupNested, diagnosticSearch: { id: diagId } },
       }]);
       callMap[idx++] = { type: 'diagnostic', diagId };
     }
@@ -106,18 +109,18 @@ class FleetSnapshot {
     if (activeFaults) {
       calls.push(['Get', {
         typeName: 'FaultData',
-        search: { faultStates: ['Active'] },
+        search: { ...groupNested, faultStates: ['Active'] },
       }]);
       callMap[idx++] = 'faults';
     }
 
     if (recentTrips > 0) {
       // Note: Trip doesn't support resultsLimit per-device. We fetch recent
-      // trips globally and group by device on the client.
+      // trips (optionally scoped to groupIds) and bucket by device on the client.
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       calls.push(['Get', {
         typeName:     'Trip',
-        search:        { fromDate: since },
+        search:        { ...groupNested, fromDate: since },
         resultsLimit:  Math.min(recentTrips * 500, 50_000), // rough upper bound
       }]);
       callMap[idx++] = { type: 'recentTrips', limit: recentTrips };

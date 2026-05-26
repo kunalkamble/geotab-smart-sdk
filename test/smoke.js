@@ -117,6 +117,57 @@ check('HistoryQuery rejects missing required args', async () => {
   await assert.rejects(() => instance.history({ deviceId: 'b1' }), /from/i);
 });
 
+check('FleetSnapshot.groupIds propagates to every entity call', async () => {
+  let captured = null;
+  const fakeSession = {
+    multiCall: async (calls) => { captured = calls; return calls.map(() => []); },
+  };
+  const fakeRateLimiter = { withRetry: (_, fn) => fn() };
+  const fakeCache = { set: () => {}, getAll: () => null };
+
+  const snapshot = new sdk.FleetSnapshot(fakeSession, fakeRateLimiter, fakeCache);
+  await snapshot.fetch({
+    include: {
+      devices:      true,
+      liveStatus:   true,
+      activeFaults: true,
+      diagnostics:  [sdk.Diagnostics.FUEL_LEVEL],
+      recentTrips:  3,
+    },
+    groupIds: ['groupCompanyId'],
+  });
+
+  assert.ok(captured, 'multiCall should have been invoked');
+
+  for (const [method, params] of captured) {
+    assert.equal(method, 'Get');
+    const { typeName, search } = params;
+    if (typeName === 'Device' || typeName === 'DeviceStatusInfo') {
+      assert.deepEqual(search.groups, [{ id: 'groupCompanyId' }],
+        `${typeName} should have search.groups`);
+    } else {
+      assert.deepEqual(search.deviceSearch?.groups, [{ id: 'groupCompanyId' }],
+        `${typeName} should have search.deviceSearch.groups`);
+    }
+  }
+});
+
+check('FleetSnapshot omits group filter when groupIds is empty', async () => {
+  let captured = null;
+  const fakeSession = {
+    multiCall: async (calls) => { captured = calls; return calls.map(() => []); },
+  };
+  const fakeCache = { set: () => {}, getAll: () => null };
+
+  const snapshot = new sdk.FleetSnapshot(fakeSession, {}, fakeCache);
+  await snapshot.fetch({ include: { liveStatus: true, activeFaults: true } });
+
+  for (const [, params] of captured) {
+    assert.equal(params.search.groups, undefined, 'no top-level groups');
+    assert.equal(params.search.deviceSearch?.groups, undefined, 'no nested groups');
+  }
+});
+
 const total = passed + (process.exitCode === 1 ? 1 : 0); // best-effort total
 if (process.exitCode === 1) {
   console.error(`\n✗ smoke test failed (${passed} of ${total} checks passed)`);
