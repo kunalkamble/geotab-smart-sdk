@@ -417,6 +417,60 @@ check('default (no readOnly) allows any method — SDK stays fully capable', asy
   await open.call('Add', { typeName: 'Device' });
 });
 
+check('readOnly allowlist is case-insensitive on the Get prefix', async () => {
+  const ro = makeReadOnly();
+  // Get / GET / get all pass — defense-in-depth against stray casing.
+  await ro.call('Get',     { typeName: 'Device' });
+  await ro.call('GET',     { typeName: 'Device' });
+  await ro.call('get',     { typeName: 'Device' });
+  await ro.call('GetFeed', { typeName: 'LogRecord' });
+  // Anything not prefixed `Get` (any case) is rejected.
+  await assert.rejects(() => ro.call('Set', { typeName: 'Group' }), /readOnly/i);
+  await assert.rejects(() => ro.call('SET', { typeName: 'Group' }), /readOnly/i);
+  await assert.rejects(() => ro.call('set', { typeName: 'Group' }), /readOnly/i);
+});
+
+check('GeotabSDK extends EventEmitter — sdk.on listeners actually fire', async () => {
+  const sdk2 = new sdk.GeotabSDK({ username: 'u', password: 'p', database: 'd' });
+  let connectedCalls = 0;
+  let authCalls      = 0;
+  sdk2.on('connected',     () => { connectedCalls++; });
+  sdk2.on('authenticated', () => { authCalls++; });
+
+  // Manually fire the upstream session events the way Session does internally.
+  sdk2._session.emit('session:connected',     { database: 'd', server: 'my.geotab.com' });
+  sdk2._session.emit('session:authenticated', { sessionId: 'abc', userName: 'u', database: 'd', server: 'my.geotab.com' });
+
+  assert.equal(connectedCalls, 1, 'connected listener should have fired');
+  assert.equal(authCalls,      1, 'authenticated listener should have fired');
+});
+
+check('HistoryQuery._paginate dedupes by id across page boundaries', async () => {
+  const hq = new sdk.HistoryQuery({}, {});
+  // Fake first page hitting the size limit exactly. Records share a boundary
+  // dateTime to exercise the dedup-by-id path that the slice(1) approach broke.
+  const PAGE = 50_000;
+  const firstPage = Array.from({ length: PAGE }, (_, i) => ({
+    id: 'a' + i,
+    dateTime: i >= PAGE - 3 ? '2024-01-01T00:00:05.000Z' : '2024-01-01T00:00:00.000Z',
+  }));
+
+  // Second page starts with three duplicates (same ids as the boundary three),
+  // then has two genuinely new records.
+  const secondPage = [
+    { id: 'a' + (PAGE - 3), dateTime: '2024-01-01T00:00:05.000Z' },
+    { id: 'a' + (PAGE - 2), dateTime: '2024-01-01T00:00:05.000Z' },
+    { id: 'a' + (PAGE - 1), dateTime: '2024-01-01T00:00:05.000Z' },
+    { id: 'b1', dateTime: '2024-01-01T00:00:06.000Z' },
+    { id: 'b2', dateTime: '2024-01-01T00:00:07.000Z' },
+  ];
+
+  const merged = await hq._paginate(firstPage, async () => secondPage);
+  assert.equal(merged.length, PAGE + 2, 'should add only the 2 fresh records');
+  assert.equal(merged[merged.length - 1].id, 'b2');
+  assert.equal(merged[merged.length - 2].id, 'b1');
+});
+
 const total = passed + (process.exitCode === 1 ? 1 : 0); // best-effort total
 if (process.exitCode === 1) {
   console.error(`\n✗ smoke test failed (${passed} of ${total} checks passed)`);

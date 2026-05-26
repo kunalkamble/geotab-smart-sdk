@@ -112,6 +112,17 @@ class HistoryQuery {
       gpsRecords = await this._paginateLogRecord(gpsRecords, deviceId, fromISO, toISO_);
     }
 
+    // Paginate each diagnostic stream if it hit the page limit too. StatusData
+    // can match LogRecord's volume on long ranges, so a silent truncation here
+    // would lose real data.
+    for (const diagId of diagnostics) {
+      if (diagResults[diagId].length >= PAGE_SIZE) {
+        diagResults[diagId] = await this._paginateStatusData(
+          diagResults[diagId], deviceId, diagId, fromISO, toISO_,
+        );
+      }
+    }
+
     // Compute bearing from consecutive GPS points if requested
     if (computeBearing && gpsRecords.length > 1) {
       this._addBearing(gpsRecords);
@@ -211,26 +222,59 @@ class HistoryQuery {
   }
 
   async _paginateLogRecord(firstPage, deviceId, fromISO, toISO_) {
+    return this._paginate(firstPage, async (nextFrom) => this._session.call('Get', {
+      typeName: 'LogRecord',
+      search: {
+        deviceSearch: { id: deviceId },
+        fromDate:     nextFrom,
+        toDate:       toISO_,
+      },
+      resultsLimit: PAGE_SIZE,
+    }));
+  }
+
+  async _paginateStatusData(firstPage, deviceId, diagId, fromISO, toISO_) {
+    return this._paginate(firstPage, async (nextFrom) => this._session.call('Get', {
+      typeName: 'StatusData',
+      search: {
+        deviceSearch:     { id: deviceId },
+        diagnosticSearch: { id: diagId },
+        fromDate:         nextFrom,
+        toDate:           toISO_,
+      },
+      resultsLimit: PAGE_SIZE,
+    }));
+  }
+
+  /**
+   * Shared pagination loop for LogRecord / StatusData. Each successive page
+   * starts at the last record's `dateTime`, which Geotab interprets as `>=`.
+   * That re-fetches the boundary records — so we dedupe by record ID, which
+   * is correct even when multiple records share the same dateTime (a real
+   * edge case at high sample rates that the older slice(1) approach lost).
+   */
+  async _paginate(firstPage, fetchPage) {
     const all = [...firstPage];
+    const seen = new Set();
+    for (const r of all) {
+      if (r?.id) seen.add(r.id);
+    }
 
     while (all.length > 0 && all.length % PAGE_SIZE === 0) {
-      const lastRecord  = all[all.length - 1];
-      const nextFrom    = lastRecord.dateTime;
-
-      const more = await this._session.call('Get', {
-        typeName: 'LogRecord',
-        search: {
-          deviceSearch: { id: deviceId },
-          fromDate:     nextFrom,
-          toDate:       toISO_,
-        },
-        resultsLimit: PAGE_SIZE,
-      });
-
+      const lastRecord = all[all.length - 1];
+      const more = await fetchPage(lastRecord.dateTime);
       if (!more || more.length === 0) break;
-      // Skip the first record — it's a duplicate of the last one we already have
-      all.push(...more.slice(1));
 
+      // Filter out anything we already have. If the entire page is duplicates
+      // (every record had the same timestamp as the boundary), we'd loop
+      // forever — break to be safe.
+      const fresh = more.filter((r) => r?.id && !seen.has(r.id));
+      if (fresh.length === 0) break;
+
+      for (const r of fresh) seen.add(r.id);
+      all.push(...fresh);
+
+      // The server returned a partial page → no more data to fetch.
       if (more.length < PAGE_SIZE) break;
     }
 

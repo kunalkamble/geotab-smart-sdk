@@ -1,8 +1,9 @@
 'use strict';
 
-const Session       = require('./core/Session');
-const RateLimiter   = require('./core/RateLimiter');
-const EntityCache   = require('./cache/EntityCache');
+const EventEmitter    = require('./core/EventEmitter');
+const Session         = require('./core/Session');
+const RateLimiter     = require('./core/RateLimiter');
+const EntityCache     = require('./cache/EntityCache');
 const FeedManager   = require('./feeds/FeedManager');
 const LiveTracker     = require('./trackers/LiveTracker');
 const RealtimeTracker = require('./trackers/RealtimeTracker');
@@ -38,7 +39,7 @@ const FleetSnapshot = require('./queries/FleetSnapshot');
  * tracker.on('update', vehicles => console.log(vehicles));
  * tracker.start();
  */
-class GeotabSDK {
+class GeotabSDK extends EventEmitter {
   /**
    * @param {object}  credentials
    * @param {string}  credentials.username
@@ -56,14 +57,15 @@ class GeotabSDK {
    *                                            must never mutate fleet data.
    */
   constructor(credentials, options = {}) {
+    super();   // initialise EventEmitter state so .on()/.emit() actually work
     this._session     = new Session(credentials, { readOnly: options.readOnly });
     this._rateLimiter = new RateLimiter();
     this._cache       = new EntityCache({ ttlMs: options.cacheTtlMs });
 
     // Forward session lifecycle events for external monitoring.
-    this._session.on('session:connected',     info => this.emit?.('connected', info));
-    this._session.on('session:expired',       ()   => this.emit?.('reconnecting'));
-    this._session.on('session:authenticated', s    => this.emit?.('authenticated', s));
+    this._session.on('session:connected',     info => this.emit('connected', info));
+    this._session.on('session:expired',       ()   => this.emit('reconnecting'));
+    this._session.on('session:authenticated', s    => this.emit('authenticated', s));
   }
 
   /**

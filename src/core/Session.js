@@ -197,7 +197,12 @@ class Session extends EventEmitter {
    */
   _assertAllowed(method) {
     if (!this._readOnly) return;
-    if (typeof method !== 'string' || !method.startsWith('Get')) {
+    // Case-insensitive on the prefix so a stray `'get'` / `'GET'` still
+    // routes through the same check; case-sensitive comparison would have
+    // *correctly* rejected lowercase too, but normalising is clearer and
+    // protects against future hand-written calls.
+    const ok = typeof method === 'string' && method.slice(0, 3).toLowerCase() === 'get';
+    if (!ok) {
       const err = new Error(
         `[GeotabSDK] readOnly mode rejected method "${method}". ` +
         `Only Get*-style methods are allowed in this SDK instance.`
