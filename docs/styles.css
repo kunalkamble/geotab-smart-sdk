@@ -8,6 +8,22 @@
   --color-border-tertiary:      #e7e7e3;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --accent-green-fg:      #0F6E56;
+  --accent-green-bg:      #E1F5EE;
+  --accent-green-border:  #0F6E5644;
+  --accent-blue-fg:       #185FA5;
+  --accent-blue-bg:       #E6F1FB;
+  --accent-blue-border:   #185FA544;
+  --accent-amber-fg:      #854F0B;
+  --accent-amber-bg:      #FAEEDA;
+  --accent-amber-border:  #854F0B44;
+  --accent-red-fg:        #A32D2D;
+  --accent-red-bg:        #FCEBEB;
+  --accent-red-border:    #A32D2D44;
+  --accent-purple-fg:     #534AB7;
+  --accent-purple-bg:     #EEEDFE;
+  --accent-purple-border: #534AB744;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,6 +35,22 @@
     --color-background-secondary: #272622;
     --color-border-secondary:     #3a3833;
     --color-border-tertiary:      #2a2925;
+
+    --accent-green-fg:      #5EE0B7;
+    --accent-green-bg:      rgba(94, 224, 183, 0.10);
+    --accent-green-border:  rgba(94, 224, 183, 0.35);
+    --accent-blue-fg:       #7BB6F2;
+    --accent-blue-bg:       rgba(123, 182, 242, 0.10);
+    --accent-blue-border:   rgba(123, 182, 242, 0.35);
+    --accent-amber-fg:      #E5B26B;
+    --accent-amber-bg:      rgba(229, 178, 107, 0.10);
+    --accent-amber-border:  rgba(229, 178, 107, 0.35);
+    --accent-red-fg:        #F08A8A;
+    --accent-red-bg:        rgba(240, 138, 138, 0.10);
+    --accent-red-border:    rgba(240, 138, 138, 0.35);
+    --accent-purple-fg:     #A8A0F5;
+    --accent-purple-bg:     rgba(168, 160, 245, 0.10);
+    --accent-purple-border: rgba(168, 160, 245, 0.35);
   }
 }
 

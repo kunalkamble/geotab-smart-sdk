@@ -73,7 +73,16 @@ await sdk.connect({ cacheDevices: true });
 
 ### 1. Live vehicle tracking (with bearing + diagnostics)
 
-`DeviceStatusInfo` is the **only** Geotab object that carries `Bearing`. Most developers reach for `LogRecord` first and wonder why heading is missing — `liveTracker()` uses the right object and enriches each snapshot with diagnostics and active fault codes in a single `multiCall`.
+There are **two trackers**. Pick based on fidelity vs cost:
+
+| Helper | Source | Update granularity | Best for |
+|---|---|---|---|
+| `sdk.liveTracker()` | `DeviceStatusInfo` (snapshot per vehicle) | Server-aggregated; lower frequency, all fields native | Dashboards, "current state per vehicle" |
+| `sdk.realtimeTracker()` | `LogRecord` (GetFeed) + companions | Every GPS fix the device emits; bearing/driver/isDriving derived | Map animation, geofencing, per-fix workflows |
+
+#### 1a. `sdk.liveTracker()` — DeviceStatusInfo snapshot
+
+`DeviceStatusInfo` is the **only** Geotab object that carries `Bearing` natively. `liveTracker()` uses it and enriches each snapshot with diagnostics and active fault codes in a single `multiCall`.
 
 ```js
 const tracker = sdk.liveTracker()
@@ -123,6 +132,42 @@ tracker.stop();
 ```
 
 Each poll batches `DeviceStatusInfo + StatusData × N + FaultData` into **one** `multiCall`. No extra HTTP round-trips.
+
+#### 1b. `sdk.realtimeTracker()` — LogRecord (every device fix)
+
+Geotab themselves recommend `LogRecord` for higher-fidelity tracking — it updates more often than `DeviceStatusInfo`, just with fewer native fields. `realtimeTracker()` uses it as the position source and derives the missing fields:
+
+- **Bearing** via `atan2` between consecutive `LogRecord` points (null on the first observation per device; held steady when stationary).
+- **`isDriving`** from `DiagnosticIgnitionId` (`StatusData`) combined with a speed threshold (default 5 km/h).
+- **Driver** from `DriverChange` (`type: 'Driver'`) — the SDK keeps a per-device map updated incrementally.
+
+```js
+const tracker = sdk.realtimeTracker()
+  .withDiagnostics([Diagnostics.FUEL_LEVEL, Diagnostics.ODOMETER])
+  .withIgnition()             // recommended — required for accurate isDriving
+  .withDriverAttribution()    // recommended — populates v.driver
+  .withFaults()
+  .pollEvery(5_000);          // default; floor 1000 ms; warns < 2000 ms
+
+tracker.on('update', (vehicles) => {
+  for (const v of vehicles) {
+    console.log(v.location.bearing);       // computed; null on first fix
+    console.log(v.isDriving);              // from ignition + speed
+    console.log(v.driver?.name);           // from DriverChange
+    console.log(v.ignition?.value);        // raw ignition reading
+    console.log(v.diagnostics[Diagnostics.FUEL_LEVEL]?.value);
+  }
+});
+
+await tracker.start();
+tracker.stop();
+```
+
+**Vehicle shape** is the same as `liveTracker` plus `ignition: { value, dateTime } | null` and `source: 'logrecord'`.
+
+**Rate-limit budget at the default 5s poll:** ~12 LogRecord GetFeed calls/min (limit 60/min) and ~12·N StatusData Get calls/min (limit ~1000/min, where N is the number of requested diagnostics plus ignition). Hard floor is 1000 ms; below 2000 ms emits a console warning.
+
+See [`examples/realtime-tracking.js`](examples/realtime-tracking.js) for a runnable demo.
 
 ---
 
@@ -322,7 +367,8 @@ DiagnosticLabels['DiagnosticFuelLevelId'];  // 'fuel level'
 | `connect({ cacheDevices?, cacheDiagnostics? })` | `Promise<void>` | Authenticates and optionally warms caches. Safe to call multiple times. |
 | `call(method, params)` | `Promise<any>` | Direct MyGeotab call with auto re-auth. |
 | `multiCall(calls)` | `Promise<any[]>` | Batched calls, preserves order. |
-| `liveTracker()` | `LiveTracker` | Fluent builder — see [§1](#1-live-vehicle-tracking-with-bearing--diagnostics). |
+| `liveTracker()` | `LiveTracker` | DeviceStatusInfo snapshot tracker — see [§1a](#1a-sdklivetracker--devicestatusinfo-snapshot). |
+| `realtimeTracker()` | `RealtimeTracker` | LogRecord-based, high-fidelity tracker — see [§1b](#1b-sdkrealtimetracker--logrecord-every-device-fix). |
 | `history(options)` | `Promise<HistoryResult>` | See [§2](#2-historical-gps--diagnostics--faults). |
 | `historyMany(deviceIds, options)` | `Promise<HistoryResult[]>` | Parallel fetch. |
 | `fleetSnapshot(options)` | `Promise<FleetSnapshotResult>` | See [§3](#3-fleet-snapshot-dashboard-load). |
@@ -340,6 +386,23 @@ DiagnosticLabels['DiagnosticFuelLevelId'];  // 'fuel level'
 | `.stop()` | `void` |
 | `.on('update', vehicles => …)` | event |
 | `.on('error',  err => …)`      | event |
+
+### `RealtimeTracker` (fluent)
+
+| Method | Returns / Notes |
+|---|---|
+| `.withDiagnostics(ids[])` | `this` |
+| `.withIgnition()` | `this` — adds `DiagnosticIgnitionId` poll, enables ignition-aware `isDriving` |
+| `.withDriverAttribution()` | `this` — populates `v.driver` via `DriverChange` |
+| `.withFaults()` | `this` |
+| `.forDevices(deviceIds[])` | `this` |
+| `.pollEvery(ms)` | `this` — default 5000, floor 1000, warns < 2000 |
+| `.drivingSpeedThreshold(kmh)` | `this` — default 5 |
+| `.startingFrom(date)` | `this` — first-poll seed date; defaults to `now - pollMs` |
+| `.start()` | `Promise<void>` |
+| `.stop()` | `void` |
+| `.on('update', vehicles => …)` | event — same shape as LiveTracker + `ignition` / `source: 'logrecord'` |
+| `.on('error',  err => …)` | event |
 
 ### `FeedManager`
 

@@ -4,7 +4,8 @@ const Session       = require('./core/Session');
 const RateLimiter   = require('./core/RateLimiter');
 const EntityCache   = require('./cache/EntityCache');
 const FeedManager   = require('./feeds/FeedManager');
-const LiveTracker   = require('./trackers/LiveTracker');
+const LiveTracker     = require('./trackers/LiveTracker');
+const RealtimeTracker = require('./trackers/RealtimeTracker');
 const HistoryQuery  = require('./queries/HistoryQuery');
 const FleetSnapshot = require('./queries/FleetSnapshot');
 
@@ -104,6 +105,34 @@ class GeotabSDK {
    */
   liveTracker() {
     return new LiveTracker(this._session, this._rateLimiter, this._cache);
+  }
+
+  /**
+   * Create a high-fidelity LogRecord-based tracker.
+   *
+   * Uses GetFeed(LogRecord) as the position source — every GPS fix the device
+   * emits, not the server-aggregated snapshot. Bearing is computed via atan2
+   * between consecutive points; isDriving from ignition + speed; driver via
+   * DriverChange.
+   *
+   * Prefer this over liveTracker() when you need smooth map animation,
+   * geofencing on raw fixes, or anything driven by per-fix granularity.
+   *
+   * @returns {RealtimeTracker}
+   *
+   * @example
+   * const tracker = sdk.realtimeTracker()
+   *   .withDiagnostics([Diagnostics.FUEL_LEVEL])
+   *   .withIgnition()             // recommended for accurate isDriving
+   *   .withDriverAttribution()    // recommended for driver field
+   *   .withFaults()
+   *   .pollEvery(5000);
+   *
+   * tracker.on('update', vehicles => { ... });
+   * await tracker.start();
+   */
+  realtimeTracker() {
+    return new RealtimeTracker(this._session, this._rateLimiter, this._cache);
   }
 
   /**
