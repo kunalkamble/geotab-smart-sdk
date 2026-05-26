@@ -98,6 +98,7 @@ tracker.stop();`,
       { name: ".withDriverAttribution()", highlight: true, note: "Recommended — tracks current driver via DriverChange" },
       { name: ".withFaults()", highlight: false, note: "Include active fault codes per vehicle" },
       { name: ".forDevices([ids])", highlight: false, note: "Restrict tracking; omit for all devices" },
+      { name: ".forGroups([ids])", highlight: true, note: "Server-side filter on StatusData / FaultData / DriverChange. LogRecord (GetFeed) filtered client-side via the device cache." },
       { name: ".pollEvery(ms)", highlight: false, note: "Default 5000 ms. Floor 1000 ms. Warns if < 2000 ms." },
       { name: ".drivingSpeedThreshold(kmh)", highlight: false, note: "Speed above which (with ignition on) → isDriving. Default 5." },
       { name: ".on('update', vehicles)", highlight: true, note: "Each fires with the merged, derived snapshot" },
@@ -107,17 +108,19 @@ tracker.stop();`,
       { type: "info", text: "Bearing is computed via atan2 between consecutive LogRecords. It's null on the first observation per device, then holds steady when stationary." },
       { type: "warn", text: "isDriving depends on ignition state — call .withIgnition() unless a speed-only heuristic is fine for your use case." },
       { type: "info", text: "5s poll uses ~12/min of the 60/min GetFeed limit on LogRecord. Hard floor 1000 ms; below 2000 ms emits a console warning." },
-      { type: "info", text: "Group filtering isn't a builder yet. Pre-resolve device IDs via sdk.call('Get', { typeName: 'Device', search: { groups: [{ id }] } }) and pass them via .forDevices()." },
+      { type: "tip",  text: "Pass .forGroups(['groupCompanyId']) to narrow the payload. StatusData / FaultData / DriverChange filter server-side; LogRecord is filtered client-side via the device cache." },
+      { type: "warn", text: "Devices added to the fleet after .start() won't appear in the device cache and will be silently dropped by the LogRecord group filter. Recreate the tracker or refresh the cache if your fleet changes." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
 const sdk = new GeotabSDK({ /* ... */ });
 
 const tracker = sdk.realtimeTracker()
   .withDiagnostics([Diagnostics.FUEL_LEVEL])
-  .withIgnition()             // recommended
-  .withDriverAttribution()    // recommended
+  .withIgnition()                  // recommended
+  .withDriverAttribution()         // recommended
   .withFaults()
-  .pollEvery(5_000);          // business default
+  .forGroups(['groupCompanyId'])   // optional — server-side + cache-based
+  .pollEvery(5_000);               // business default
 
 tracker.on('update', vehicles => {
   for (const v of vehicles) {
@@ -482,7 +485,7 @@ const HELPER_MATRIX = [
   { capability: "Trips",                    liveTracker: "—",                     realtimeTracker: "—",                     history: "include.trips",           fleetSnapshot: "recentTrips",   feeds: "Trip" },
   { capability: "Fleet summary counts",     liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "✓ .summary",    feeds: "—" },
   { capability: "Continuous sync",          liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "—",             feeds: "✓ adaptive" },
-  { capability: "Filter by group",          liveTracker: "✓ .forGroups()",        realtimeTracker: "via forDevices",        history: "via historyMany",         fleetSnapshot: "✓ groupIds",    feeds: "—" },
+  { capability: "Filter by group",          liveTracker: "✓ .forGroups()",        realtimeTracker: "✓ .forGroups()",        history: "via historyMany",         fleetSnapshot: "✓ groupIds",    feeds: "—" },
   { capability: "Device names hydrated",    liveTracker: "✓",                     realtimeTracker: "✓",                     history: "—",                       fleetSnapshot: "via cache",     feeds: "—" },
   { capability: "Connectivity state",       liveTracker: "✓ isConnected",         realtimeTracker: "✓ from recency",        history: "—",                       fleetSnapshot: "✓ summary",     feeds: "—" },
 ];

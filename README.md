@@ -448,7 +448,7 @@ The Geotab API supports group-based filtering on every entity that has a device 
 |---|---|---|
 | `sdk.fleetSnapshot({ groupIds })` | ✓ Full | Applied to every entity in the snapshot: `Device` / `DeviceStatusInfo` (top-level `groups`) and `StatusData` / `FaultData` / `Trip` (nested `deviceSearch.groups`). |
 | `sdk.liveTracker()` | ✓ `.forGroups([ids])` | Server-side group filter applied to `DeviceStatusInfo`, `StatusData`, and `FaultData`. Composable with `.forDevices()` — both intersect. |
-| `sdk.realtimeTracker()` | Workaround | Same — pre-resolve and use `.forDevices([ids])`. |
+| `sdk.realtimeTracker()` | ✓ `.forGroups([ids])` | Server-side filter on `StatusData`, `FaultData`, and `DriverChange`. `LogRecord` (GetFeed) is filtered client-side via the device cache — unknown-to-cache devices are dropped. |
 | `sdk.history({ deviceId })` | N/A | Single device by ID. |
 | `sdk.historyMany([ids], options)` | Workaround | Pre-resolve device IDs and pass them in. A `historyByGroups()` helper is planned. |
 | `sdk.feeds()` (GetFeed) | Not supported | GetFeed accepts only `fromDate` per [Geotab's data feed guide](https://geotab.github.io/sdk/software/guides/data-feed/). Filter client-side via the device cache. |

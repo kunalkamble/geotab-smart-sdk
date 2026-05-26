@@ -133,6 +133,52 @@ check('RealtimeTracker.pollEvery floors at 1000 ms', () => {
   assert.equal(t._pollMs, 1000);
 });
 
+check('RealtimeTracker.forGroups propagates server-side and NOT to LogRecord', () => {
+  const t = new sdk.RealtimeTracker({}, {}, { getAll: () => null });
+  t.withDiagnostics([sdk.Diagnostics.FUEL_LEVEL])
+    .withIgnition()
+    .withDriverAttribution()
+    .withFaults()
+    .forGroups(['groupCompanyId']);
+  const wrapped = t._buildCalls();
+  const find = (role) => wrapped.find(w => w.role === role)?.call?.[1];
+
+  // LogRecord (GetFeed) — must NOT carry a group filter
+  const lr = find('logrecord');
+  assert.equal(lr.search?.deviceSearch, undefined, 'LogRecord must have no deviceSearch');
+  assert.equal(lr.search?.groups, undefined, 'LogRecord must have no top-level groups');
+
+  // Get-based calls — must all carry deviceSearch.groups, alongside their own filters
+  const ig = find('ignition');
+  assert.deepEqual(ig.search.deviceSearch.groups, [{ id: 'groupCompanyId' }]);
+  assert.deepEqual(ig.search.diagnosticSearch, { id: sdk.Diagnostics.IGNITION });
+
+  const diag = wrapped.find(w => w.role === 'diagnostic' && w.diagId === sdk.Diagnostics.FUEL_LEVEL).call[1];
+  assert.deepEqual(diag.search.deviceSearch.groups, [{ id: 'groupCompanyId' }]);
+
+  const fd = find('faults');
+  assert.deepEqual(fd.search.deviceSearch.groups, [{ id: 'groupCompanyId' }]);
+  assert.deepEqual(fd.search.faultStates, ['Active']);
+
+  const dc = find('driverchange');
+  assert.deepEqual(dc.search.deviceSearch.groups, [{ id: 'groupCompanyId' }]);
+  assert.equal(dc.search.type, 'Driver');
+});
+
+check('RealtimeTracker without forGroups omits server-side filters', () => {
+  const t = new sdk.RealtimeTracker({}, {}, { getAll: () => null });
+  t.withDiagnostics([sdk.Diagnostics.FUEL_LEVEL])
+    .withIgnition()
+    .withDriverAttribution()
+    .withFaults();
+  const wrapped = t._buildCalls();
+  for (const w of wrapped) {
+    const params = w.call[1];
+    assert.equal(params.search?.deviceSearch?.groups, undefined,
+      `${w.role}: should have no deviceSearch.groups`);
+  }
+});
+
 check('FeedManager builder + version helpers', () => {
   const feeds = instance.feeds();
   const chained = feeds.addFeed('LogRecord');

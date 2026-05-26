@@ -55,6 +55,7 @@ class RealtimeTracker extends EventEmitter {
     this._withDriver     = false;
     this._withFaults     = false;
     this._deviceIds      = [];
+    this._groupIds       = [];
     this._pollMs         = DEFAULT_POLL_MS;
     this._drivingSpeed   = DRIVING_SPEED_THRESHOLD_KMH;
     this._initialFrom    = null;
@@ -111,6 +112,30 @@ class RealtimeTracker extends EventEmitter {
   /** Restrict tracking to a subset of devices. Omit for all devices. */
   forDevices(ids) {
     this._deviceIds = Array.isArray(ids) ? ids : [ids];
+    return this;
+  }
+
+  /**
+   * Restrict tracking to devices in one or more groups.
+   *
+   * Server-side group filtering is applied to every Get call: StatusData
+   * (ignition + diagnostics), FaultData, and DriverChange. The LogRecord
+   * GetFeed stream cannot accept a server-side filter (Geotab's GetFeed
+   * only honors fromVersion/fromDate), so LogRecord is filtered client-side
+   * using the device cache — the device's `groups` list is checked against
+   * the requested group IDs.
+   *
+   * Devices not yet in the cache (added after warmDeviceCache) are dropped
+   * to avoid leaking out-of-scope vehicles. Refresh the cache or recreate
+   * the tracker if your fleet changes mid-session.
+   *
+   * Composes with .forDevices() — the two filters intersect.
+   *
+   * @param {string[]} groupIds  Geotab group IDs (e.g. ['groupCompanyId'])
+   * @returns {this}
+   */
+  forGroups(groupIds) {
+    this._groupIds = Array.isArray(groupIds) ? groupIds : [groupIds];
     return this;
   }
 
@@ -190,7 +215,14 @@ class RealtimeTracker extends EventEmitter {
   _buildCalls() {
     const calls = [];
 
-    // [0] LogRecord — incremental via GetFeed
+    // Server-side group filter (nested form: deviceSearch.groups). LogRecord
+    // GetFeed does NOT accept a search filter beyond fromDate/fromVersion, so
+    // it's filtered client-side in _merge() via the device cache.
+    const hasGroups   = this._groupIds.length > 0;
+    const groupRefs   = hasGroups ? this._groupIds.map(id => ({ id })) : null;
+    const groupNested = hasGroups ? { deviceSearch: { groups: groupRefs } } : {};
+
+    // [0] LogRecord — incremental via GetFeed (no server-side group filter)
     if (this._logRecordToken) {
       calls.push({
         role: 'logrecord',
@@ -222,7 +254,7 @@ class RealtimeTracker extends EventEmitter {
         role: 'ignition',
         call: ['Get', {
           typeName: 'StatusData',
-          search: { diagnosticSearch: { id: Diagnostics.IGNITION }, fromDate: deltaFrom },
+          search: { ...groupNested, diagnosticSearch: { id: Diagnostics.IGNITION }, fromDate: deltaFrom },
         }],
       });
     }
@@ -234,7 +266,7 @@ class RealtimeTracker extends EventEmitter {
         diagId,
         call: ['Get', {
           typeName: 'StatusData',
-          search: { diagnosticSearch: { id: diagId }, fromDate: deltaFrom },
+          search: { ...groupNested, diagnosticSearch: { id: diagId }, fromDate: deltaFrom },
         }],
       });
     }
@@ -243,7 +275,7 @@ class RealtimeTracker extends EventEmitter {
     if (this._withFaults) {
       calls.push({
         role: 'faults',
-        call: ['Get', { typeName: 'FaultData', search: { faultStates: ['Active'] } }],
+        call: ['Get', { typeName: 'FaultData', search: { ...groupNested, faultStates: ['Active'] } }],
       });
     }
 
@@ -253,7 +285,7 @@ class RealtimeTracker extends EventEmitter {
         role: 'driverchange',
         call: ['Get', {
           typeName: 'DriverChange',
-          search: { fromDate: deltaFrom, type: 'Driver' },
+          search: { ...groupNested, fromDate: deltaFrom, type: 'Driver' },
         }],
       });
     }
@@ -323,19 +355,33 @@ class RealtimeTracker extends EventEmitter {
       faultsByDev.get(devId).push(f);
     }
 
+    // Client-side group filter for LogRecord (GetFeed can't accept one).
+    // Look up each device in the cache and check its `groups` against
+    // the requested group IDs. Unknown-to-cache devices are dropped — the
+    // cache is warmed at start(), so this only matters for devices added
+    // after the tracker started.
+    const deviceCache  = this._cache.getAll('Device');
+    const allowedGroups = this._groupIds.length > 0 ? new Set(this._groupIds) : null;
+    const deviceInScope = (devId) => {
+      if (this._deviceIds.length > 0 && !this._deviceIds.includes(devId)) return false;
+      if (!allowedGroups) return true;
+      const dev = deviceCache?.get(devId);
+      if (!dev) return false;
+      return Array.isArray(dev.groups) && dev.groups.some(g => allowedGroups.has(g?.id));
+    };
+
     // Pick the latest LogRecord per device (poll may return many per device)
     const latestPerDevice = new Map();
     for (const rec of logs) {
       const devId = rec.device?.id;
       if (!devId) continue;
-      if (this._deviceIds.length > 0 && !this._deviceIds.includes(devId)) continue;
+      if (!deviceInScope(devId)) continue;
       const cur = latestPerDevice.get(devId);
       if (!cur || new Date(rec.dateTime) > new Date(cur.dateTime)) {
         latestPerDevice.set(devId, rec);
       }
     }
 
-    const deviceCache = this._cache.getAll('Device');
     const nowMs = Date.now();
     const vehicles = [];
 
@@ -425,12 +471,17 @@ class RealtimeTracker extends EventEmitter {
     this._cache.set('Device', devices);
   }
 
+  _groupNestedSearch() {
+    if (this._groupIds.length === 0) return {};
+    return { deviceSearch: { groups: this._groupIds.map(id => ({ id })) } };
+  }
+
   async _seedIgnitionMap() {
     if (!this._withIgnition) return;
     const fromDate = new Date(Date.now() - IGNITION_LOOKBACK_MS).toISOString();
     const records = await this._session.call('Get', {
       typeName: 'StatusData',
-      search: { diagnosticSearch: { id: Diagnostics.IGNITION }, fromDate },
+      search: { ...this._groupNestedSearch(), diagnosticSearch: { id: Diagnostics.IGNITION }, fromDate },
     });
     for (const rec of (records || [])) {
       const devId = rec.device?.id;
@@ -447,7 +498,7 @@ class RealtimeTracker extends EventEmitter {
     const fromDate = new Date(Date.now() - DRIVER_LOOKBACK_MS).toISOString();
     const changes = await this._session.call('Get', {
       typeName: 'DriverChange',
-      search: { fromDate, type: 'Driver' },
+      search: { ...this._groupNestedSearch(), fromDate, type: 'Driver' },
     });
     (changes || [])
       .slice()
