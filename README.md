@@ -364,7 +364,7 @@ DiagnosticLabels['DiagnosticFuelLevelId'];  // 'fuel level'
 
 | Method | Returns | Notes |
 |---|---|---|
-| `connect({ cacheDevices?, cacheDiagnostics? })` | `Promise<void>` | Authenticates and optionally warms caches. Safe to call multiple times. |
+| `connect({ cacheDevices?, cacheGroups?, cacheDiagnostics? })` | `Promise<void>` | Authenticates and optionally warms caches. `cacheGroups: [ids]` scopes the device cache to specific groups (and implies `cacheDevices`). Safe to call multiple times. |
 | `call(method, params)` | `Promise<any>` | Direct MyGeotab call with auto re-auth. |
 | `multiCall(calls)` | `Promise<any[]>` | Batched calls, preserves order. |
 | `liveTracker()` | `LiveTracker` | DeviceStatusInfo snapshot tracker — see [§1a](#1a-sdklivetracker--devicestatusinfo-snapshot). |
@@ -454,7 +454,7 @@ The Geotab API supports group-based filtering on every entity that has a device 
 | `sdk.historyMany([ids], options)` | Workaround | Pre-resolve device IDs and pass them in. |
 | `sdk.historyByGroups([groupIds], options)` | ✓ Native | Resolves the groups to device IDs (one `Get(Device)` call), then fans out to `historyMany`. Returns `[]` if no devices match. |
 | `sdk.feeds()` (GetFeed) | Not supported | GetFeed accepts only `fromDate` per [Geotab's data feed guide](https://geotab.github.io/sdk/software/guides/data-feed/). Filter client-side via the device cache. |
-| `sdk.connect({ cacheDevices })` | Not yet | Caches all devices. A `cacheGroups: [ids]` scoping option is planned. |
+| `sdk.connect({ cacheGroups })` | ✓ Native | Scopes the device cache to one or more groups. Implies `cacheDevices`. Without it, `cacheDevices: true` still loads the whole fleet. |
 
 ### Workaround: resolve devices, then call the helper
 

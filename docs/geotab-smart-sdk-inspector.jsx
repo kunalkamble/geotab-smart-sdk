@@ -11,6 +11,7 @@ const CASES = [
       { name: "server", highlight: false, note: "Optional. Defaults to my.geotab.com" },
       { name: "options.cacheTtlMs", highlight: false, note: "EntityCache TTL. Defaults to 1 hour" },
       { name: "connect({ cacheDevices })", highlight: true, note: "Warms the device cache up front — instant name lookups" },
+      { name: "connect({ cacheGroups: [ids] })", highlight: true, note: "Scopes the device cache to one or more groups. Implies cacheDevices." },
       { name: "connect({ cacheDiagnostics })", highlight: false, note: "Pre-load Diagnostic definitions" },
     ],
     gotchas: [
@@ -31,6 +32,9 @@ const sdk = new GeotabSDK({
 
 // Optional: warm caches up front
 await sdk.connect({ cacheDevices: true });
+
+// Or scope to a subset (useful for large fleets where you operate on one division)
+await sdk.connect({ cacheGroups: ['groupCompanyId'] });
 
 // All helpers are now ready
 const fleet = await sdk.fleetSnapshot({ include: { liveStatus: true } });
@@ -507,7 +511,7 @@ const CHEAT_SECTIONS = [
   cacheTtlMs,       // optional, default 1h
 });
 
-await sdk.connect({ cacheDevices?, cacheDiagnostics? });`,
+await sdk.connect({ cacheDevices?, cacheGroups?: [ids], cacheDiagnostics? });`,
   },
   {
     title: "Raw access (escape hatch)",
@@ -601,7 +605,7 @@ const SYSTEM_PROMPT = `You are an expert on the geotab-smart-sdk Node.js package
 
 Surface:
 - new GeotabSDK({ username, password, database, server? }, { cacheTtlMs? })
-- sdk.connect({ cacheDevices?, cacheDiagnostics? }) — idempotent; safe to call multiple times
+- sdk.connect({ cacheDevices?, cacheGroups?: [ids], cacheDiagnostics? }) — idempotent; safe to call multiple times. cacheGroups scopes the device cache to specific groups and implies cacheDevices.
 - sdk.call(method, params), sdk.multiCall([[method, params], ...]) — auto re-auth + rate-limit retry
 - sdk.liveTracker() — DeviceStatusInfo-based. Fluent: .withDiagnostics([ids]), .withFaults(), .forDevices([ids]), .pollEvery(ms), .start(), .stop(). Events: 'update' (vehicles), 'error' (err). Each poll is a single multiCall. Use for dashboards / one-snapshot-per-vehicle.
 - sdk.realtimeTracker() — LogRecord (GetFeed)-based. Same fluent surface plus .withIgnition(), .withDriverAttribution(), .drivingSpeedThreshold(kmh), .startingFrom(date). Default pollEvery(5000); hard floor 1000ms; soft warning < 2000ms. Bearing computed via atan2 between consecutive LogRecord points (null on the first observation per device, holds steady when stationary). isDriving = ignition-on AND speed > threshold (or speed-only if ignition unknown). Driver field tracked via DriverChange (type 'Driver'). Use for high-fidelity / every-fix tracking.

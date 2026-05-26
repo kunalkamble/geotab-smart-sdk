@@ -260,16 +260,32 @@ class GeotabSDK {
    * Warm up the session and optional entity caches.
    * Call this explicitly at startup if you want to fail fast on bad credentials.
    *
-   * @param {object} [options]
-   * @param {boolean} [options.cacheDevices=false]    Pre-load all devices
-   * @param {boolean} [options.cacheDiagnostics=false] Pre-load diagnostic definitions
+   * @param {object}    [options]
+   * @param {boolean}   [options.cacheDevices=false]      Pre-load all devices into the EntityCache.
+   * @param {string[]}  [options.cacheGroups]             Scope the device cache to one or more group IDs.
+   *                                                       Implies cacheDevices. Useful when your app only
+   *                                                       operates on a subset of a large fleet.
+   * @param {boolean}   [options.cacheDiagnostics=false]  Pre-load diagnostic definitions.
    * @returns {Promise<void>}
+   *
+   * @example
+   * // Whole-fleet cache
+   * await sdk.connect({ cacheDevices: true });
+   *
+   * // Scoped cache (only the company group's devices)
+   * await sdk.connect({ cacheGroups: ['groupCompanyId'] });
    */
   async connect(options = {}) {
     await this._session.connect();
 
-    if (options.cacheDevices) {
-      const devices = await this._session.call('Get', { typeName: 'Device', search: {} });
+    const groupIds      = Array.isArray(options.cacheGroups) ? options.cacheGroups : [];
+    const wantsDevices  = options.cacheDevices || groupIds.length > 0;
+
+    if (wantsDevices) {
+      const search = groupIds.length > 0
+        ? { groups: groupIds.map(id => ({ id })) }
+        : {};
+      const devices = await this._session.call('Get', { typeName: 'Device', search });
       this._cache.set('Device', devices);
     }
 

@@ -235,6 +235,54 @@ check('historyByGroups resolves groups → devices, then fans out to historyMany
   assert.equal(result[1].deviceId, 'b2');
 });
 
+check('connect({ cacheGroups }) scopes the device cache fetch', async () => {
+  const captured = [];
+  const fakeSession = {
+    on: () => {},
+    connect: async () => {},
+    call: async (method, params) => { captured.push({ method, params }); return []; },
+  };
+  const sdk2 = new sdk.GeotabSDK({ username: 'u', password: 'p', database: 'd' });
+  sdk2._session = fakeSession;
+
+  await sdk2.connect({ cacheGroups: ['groupCompanyId'] });
+
+  const deviceCall = captured.find(c => c.params.typeName === 'Device');
+  assert.ok(deviceCall, 'Device fetch should occur (cacheGroups implies cacheDevices)');
+  assert.deepEqual(deviceCall.params.search.groups, [{ id: 'groupCompanyId' }]);
+});
+
+check('connect({ cacheDevices: true }) without cacheGroups uses empty search', async () => {
+  const captured = [];
+  const fakeSession = {
+    on: () => {},
+    connect: async () => {},
+    call: async (method, params) => { captured.push({ method, params }); return []; },
+  };
+  const sdk2 = new sdk.GeotabSDK({ username: 'u', password: 'p', database: 'd' });
+  sdk2._session = fakeSession;
+
+  await sdk2.connect({ cacheDevices: true });
+
+  const deviceCall = captured.find(c => c.params.typeName === 'Device');
+  assert.deepEqual(deviceCall.params.search, {});
+});
+
+check('connect() with no cache options performs no Get calls', async () => {
+  const captured = [];
+  const fakeSession = {
+    on: () => {},
+    connect: async () => {},
+    call: async (method, params) => { captured.push({ method, params }); return []; },
+  };
+  const sdk2 = new sdk.GeotabSDK({ username: 'u', password: 'p', database: 'd' });
+  sdk2._session = fakeSession;
+
+  await sdk2.connect();
+
+  assert.equal(captured.length, 0, 'no Get calls should be made');
+});
+
 check('historyByGroups returns [] when group has no devices', async () => {
   const fakeSession = {
     call: async () => [],
