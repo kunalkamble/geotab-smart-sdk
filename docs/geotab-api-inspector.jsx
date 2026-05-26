@@ -5,7 +5,7 @@ const CASES = [
     id: "live", label: "Live vehicle location", icon: "ti-map-pin",
     tagline: "Position, bearing & driver — right now",
     primaryObject: "DeviceStatusInfo", method: "Get / GetFeed",
-    accentColor: "#0F6E56", accentBg: "#E1F5EE",
+    accentColor: "var(--accent-green-fg)", accentBg: "var(--accent-green-bg)", accentBorder: "var(--accent-green-border)",
     fields: [
       { name: "Latitude / Longitude", highlight: false, note: "Current coordinates" },
       { name: "Bearing", highlight: true, note: "Heading in degrees 0-360 — ONLY in this object" },
@@ -42,7 +42,7 @@ const statuses = await api.call('Get', {
     id: "history", label: "Historical GPS trail", icon: "ti-route",
     tagline: "GPS points over a time range",
     primaryObject: "LogRecord", method: "Get / GetFeed",
-    accentColor: "#185FA5", accentBg: "#E6F1FB",
+    accentColor: "var(--accent-blue-fg)", accentBg: "var(--accent-blue-bg)", accentBorder: "var(--accent-blue-border)",
     fields: [
       { name: "DateTime", highlight: false, note: "UTC timestamp of each GPS fix" },
       { name: "Latitude / Longitude", highlight: false, note: "Position at that moment" },
@@ -88,7 +88,7 @@ fromVersion = feed.toVersion; // save this for next poll`,
     id: "diagnostics", label: "Diagnostics & sensor data", icon: "ti-settings-2",
     tagline: "Odometer, fuel, aux inputs, engine hours",
     primaryObject: "StatusData", method: "Get / GetFeed",
-    accentColor: "#854F0B", accentBg: "#FAEEDA",
+    accentColor: "var(--accent-amber-fg)", accentBg: "var(--accent-amber-bg)", accentBorder: "var(--accent-amber-border)",
     fields: [
       { name: "DateTime", highlight: false, note: "When this reading was recorded" },
       { name: "Data", highlight: true, note: "The sensor value — units depend entirely on the Diagnostic" },
@@ -136,7 +136,7 @@ const odo = await api.call('Get', {
     id: "faults", label: "Fault codes (DTCs)", icon: "ti-alert-hexagon",
     tagline: "OBD-II / J1939 fault codes and DTCs",
     primaryObject: "FaultData", method: "Get / GetFeed",
-    accentColor: "#A32D2D", accentBg: "#FCEBEB",
+    accentColor: "var(--accent-red-fg)", accentBg: "var(--accent-red-bg)", accentBorder: "var(--accent-red-border)",
     fields: [
       { name: "DateTime", highlight: false, note: "When the fault was triggered" },
       { name: "FaultState", highlight: true, note: "Active | Pending | NotActive — filter by this" },
@@ -176,7 +176,7 @@ fromVersion = feed.toVersion;`,
     id: "trips", label: "Trip history", icon: "ti-car",
     tagline: "Completed trips: start/stop, distance, driver",
     primaryObject: "Trip", method: "Get / GetFeed",
-    accentColor: "#534AB7", accentBg: "#EEEDFE",
+    accentColor: "var(--accent-purple-fg)", accentBg: "var(--accent-purple-bg)", accentBorder: "var(--accent-purple-border)",
     fields: [
       { name: "Start / Stop", highlight: false, note: "Trip timestamps in UTC" },
       { name: "Distance", highlight: false, note: "km driven for this trip" },
@@ -363,7 +363,7 @@ function CodeBlock({ code, id, copiedId, onCopy }) {
     <div style={{ position: "relative", marginTop: 12 }}>
       <pre style={{
         background: "#0f1117", color: "#e2e8f0",
-        borderRadius: 8, padding: "14px 14px 14px 14px",
+        borderRadius: 8, padding: 14,
         fontSize: 12.5, lineHeight: 1.65, overflowX: "auto",
         fontFamily: "var(--font-mono)", margin: 0,
         border: "0.5px solid rgba(255,255,255,0.08)"
@@ -456,7 +456,7 @@ export default function GeotabInspector() {
   });
 
   return (
-    <div style={{ fontFamily: "var(--font-sans)", minHeight: 640 }}>
+    <div className="geotab-inspector" style={{ fontFamily: "var(--font-sans)", minHeight: 640 }}>
       <h2 className="sr-only">Geotab API Inspector — use-case driven reference for MyGeotab API developers</h2>
 
       {/* Header */}
@@ -494,7 +494,7 @@ export default function GeotabInspector() {
                 padding: "9px 12px", borderRadius: 7, cursor: "pointer", textAlign: "left",
                 background: caseId === c.id ? c.accentBg : "transparent",
                 color: caseId === c.id ? c.accentColor : "var(--color-text-secondary)",
-                border: `0.5px solid ${caseId === c.id ? c.accentColor + "44" : "transparent"}`,
+                border: `0.5px solid ${caseId === c.id ? c.accentBorder : "transparent"}`,
                 fontSize: 13, fontWeight: caseId === c.id ? 500 : 400, transition: "all 0.15s",
               }}>
                 <i className={`ti ${c.icon}`} style={{ fontSize: 15, flexShrink: 0 }} aria-hidden="true" />
@@ -527,7 +527,7 @@ export default function GeotabInspector() {
                       display: "flex", alignItems: "flex-start", gap: 10,
                       padding: "7px 10px", borderRadius: 6,
                       background: f.highlight ? activeCase.accentBg : "var(--color-background-secondary)",
-                      border: f.highlight ? `0.5px solid ${activeCase.accentColor}44` : "0.5px solid transparent",
+                      border: f.highlight ? `0.5px solid ${activeCase.accentBorder}` : "0.5px solid transparent",
                     }}>
                       <code style={{ fontSize: 12.5, fontFamily: "var(--font-mono)", color: f.highlight ? activeCase.accentColor : "var(--color-text-primary)", fontWeight: f.highlight ? 500 : 400, minWidth: 200, flexShrink: 0 }}>{f.name}</code>
                       <span style={{ fontSize: 12.5, color: "var(--color-text-secondary)" }}>{f.note}</span>
@@ -566,7 +566,7 @@ export default function GeotabInspector() {
             Which API object contains which field? Use this to avoid fetching the wrong entity type.
           </div>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+            <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   {["Field", "LogRecord", "DeviceStatusInfo", "StatusData", "FaultData", "Trip"].map((h, i) => (
@@ -576,7 +576,7 @@ export default function GeotabInspector() {
                       background: "var(--color-background-secondary)",
                       borderBottom: "0.5px solid var(--color-border-tertiary)",
                       fontFamily: i > 0 ? "var(--font-mono)" : "var(--font-sans)",
-                      width: i === 0 ? "22%" : "15.6%",
+                      whiteSpace: "nowrap",
                     }}>{h}</th>
                   ))}
                 </tr>
@@ -761,7 +761,7 @@ export default function GeotabInspector() {
                   {[0, 1, 2].map(j => (
                     <div key={j} style={{
                       width: 6, height: 6, borderRadius: "50%", background: "#0F6E56",
-                      animation: `bounce 1s ${j * 0.15}s infinite`,
+                      animation: `geotab-bounce 1s ${j * 0.15}s infinite`,
                     }} />
                   ))}
                 </div>
@@ -776,15 +776,29 @@ export default function GeotabInspector() {
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMsg()}
               placeholder="Ask about the Geotab API…"
-              style={{ flex: 1, fontSize: 13.5, padding: "9px 12px", borderRadius: 8 }}
+              aria-label="Ask about the Geotab API"
+              style={{
+                flex: 1, fontSize: 13.5, padding: "9px 12px", borderRadius: 8,
+                background: "var(--color-background-primary)",
+                color: "var(--color-text-primary)",
+                border: "0.5px solid var(--color-border-secondary)",
+                fontFamily: "var(--font-sans)", boxSizing: "border-box", outline: "none",
+              }}
             />
-            <button onClick={sendMsg} disabled={loading || !input.trim()} style={{
-              padding: "9px 16px", borderRadius: 8, cursor: loading ? "not-allowed" : "pointer",
-              background: loading ? "var(--color-background-secondary)" : "#0F6E56",
-              color: loading ? "var(--color-text-secondary)" : "#fff",
-              border: "none", fontSize: 13.5, fontWeight: 500,
-              opacity: (!input.trim() || loading) ? 0.5 : 1,
-            }}>
+            <button
+              onClick={sendMsg}
+              disabled={loading || !input.trim()}
+              aria-label="Send message"
+              style={{
+                padding: "9px 16px", borderRadius: 8,
+                cursor: (loading || !input.trim()) ? "not-allowed" : "pointer",
+                background: loading ? "var(--color-background-secondary)" : "#0F6E56",
+                color: loading ? "var(--color-text-secondary)" : "#fff",
+                border: "0.5px solid " + (loading ? "var(--color-border-secondary)" : "#0F6E56"),
+                fontSize: 13.5, fontWeight: 500,
+                opacity: (!input.trim() || loading) ? 0.5 : 1,
+              }}
+            >
               <i className="ti ti-send" aria-hidden="true" />
             </button>
           </div>
@@ -792,12 +806,48 @@ export default function GeotabInspector() {
       )}
 
       <style>{`
-        @keyframes bounce {
-          0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
-          40% { transform: scale(1); opacity: 1; }
+        .geotab-inspector {
+          --accent-green-fg:      #0F6E56;
+          --accent-green-bg:      #E1F5EE;
+          --accent-green-border:  #0F6E5644;
+          --accent-blue-fg:       #185FA5;
+          --accent-blue-bg:       #E6F1FB;
+          --accent-blue-border:   #185FA544;
+          --accent-amber-fg:      #854F0B;
+          --accent-amber-bg:      #FAEEDA;
+          --accent-amber-border:  #854F0B44;
+          --accent-red-fg:        #A32D2D;
+          --accent-red-bg:        #FCEBEB;
+          --accent-red-border:    #A32D2D44;
+          --accent-purple-fg:     #534AB7;
+          --accent-purple-bg:     #EEEDFE;
+          --accent-purple-border: #534AB744;
         }
-        button { font-family: var(--font-sans); }
-        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+        @media (prefers-color-scheme: dark) {
+          .geotab-inspector {
+            --accent-green-fg:      #5EE0B7;
+            --accent-green-bg:      rgba(94, 224, 183, 0.10);
+            --accent-green-border:  rgba(94, 224, 183, 0.35);
+            --accent-blue-fg:       #7BB6F2;
+            --accent-blue-bg:       rgba(123, 182, 242, 0.10);
+            --accent-blue-border:   rgba(123, 182, 242, 0.35);
+            --accent-amber-fg:      #E5B26B;
+            --accent-amber-bg:      rgba(229, 178, 107, 0.10);
+            --accent-amber-border:  rgba(229, 178, 107, 0.35);
+            --accent-red-fg:        #F08A8A;
+            --accent-red-bg:        rgba(240, 138, 138, 0.10);
+            --accent-red-border:    rgba(240, 138, 138, 0.35);
+            --accent-purple-fg:     #A8A0F5;
+            --accent-purple-bg:     rgba(168, 160, 245, 0.10);
+            --accent-purple-border: rgba(168, 160, 245, 0.35);
+          }
+        }
+        @keyframes geotab-bounce {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+          40%           { transform: scale(1);   opacity: 1;   }
+        }
+        .geotab-inspector button { font-family: var(--font-sans); }
+        .geotab-inspector .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
       `}</style>
     </div>
   );
