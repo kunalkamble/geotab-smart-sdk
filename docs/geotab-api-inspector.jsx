@@ -21,22 +21,37 @@ const CASES = [
       { type: "info", text: "Returns one latest snapshot per vehicle, not a time series." },
       { type: "tip",  text: "Use GetFeed(DeviceStatusInfo) to stream real-time position updates efficiently." },
     ],
-    code: `// ✅ DeviceStatusInfo — live location with bearing
-const statuses = await api.call('Get', {
-  typeName: 'DeviceStatusInfo',
-  search: {}  // or filter by groups: [{ id: 'GroupCompanyId' }]
-});
+    code: `const GeotabApi = require('mg-api-js');
 
-// What you get per vehicle:
-// status.latitude, status.longitude  → position
-// status.bearing                     → heading (0-360°) ← unique to this object
-// status.speed                       → current speed km/h
-// status.isDriving                   → true if moving
-// status.driver.id                   → driver if identified
-// status.isDeviceCommunicating       → connectivity status
+const api = new GeotabApi({
+  credentials: {
+    userName: process.env.GEOTAB_USER,
+    password: process.env.GEOTAB_PASS,
+    database: process.env.GEOTAB_DB,
+  },
+  path: 'my.geotab.com',
+}, { rememberMe: true });
 
-// ❌ Avoid using LogRecord for live tracking
-//    It has no bearing and no isDriving state`,
+(async () => {
+  await api.authenticate();
+
+  // ✅ DeviceStatusInfo — live location with bearing
+  const statuses = await api.call('Get', {
+    typeName: 'DeviceStatusInfo',
+    search: {}  // or filter by groups: [{ id: 'GroupCompanyId' }]
+  });
+
+  // What you get per vehicle:
+  // status.latitude, status.longitude  → position
+  // status.bearing                     → heading (0-360°) ← unique to this object
+  // status.speed                       → current speed km/h
+  // status.isDriving                   → true if moving
+  // status.driver.id                   → driver if identified
+  // status.isDeviceCommunicating       → connectivity status
+
+  // ❌ Avoid using LogRecord for live tracking
+  //    It has no bearing and no isDriving state
+})();`,
   },
   {
     id: "history", label: "Historical GPS trail", icon: "ti-route",
@@ -55,16 +70,16 @@ const statuses = await api.call('Get', {
       { type: "info", text: "Max 50,000 records per request. Paginate with fromDate offsets for long ranges." },
       { type: "tip",  text: "For continuous sync, use GetFeed — it uses version tokens instead of date ranges." },
     ],
-    code: `// Get historical GPS for a vehicle and date range
-const gps = await api.call('Get', {
-  typeName: 'LogRecord',
-  search: {
-    deviceSearch: { id: 'b1' },
-    fromDate: '2024-01-15T00:00:00.000Z',
-    toDate:   '2024-01-15T23:59:59.000Z'
+    code: `const GeotabApi = require('mg-api-js');
+
+const api = new GeotabApi({
+  credentials: {
+    userName: process.env.GEOTAB_USER,
+    password: process.env.GEOTAB_PASS,
+    database: process.env.GEOTAB_DB,
   },
-  resultsLimit: 50000  // hard max
-});
+  path: 'my.geotab.com',
+}, { rememberMe: true });
 
 // Compute bearing from consecutive points (no built-in field):
 function calcBearing(p1, p2) {
@@ -77,12 +92,27 @@ function calcBearing(p1, p2) {
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
-// Continuous streaming via GetFeed:
-let fromVersion = null;
-const feed = await api.call('GetFeed', {
-  typeName: 'LogRecord', fromVersion, resultsLimit: 50000
-});
-fromVersion = feed.toVersion; // save this for next poll`,
+(async () => {
+  await api.authenticate();
+
+  // Get historical GPS for a vehicle and date range
+  const gps = await api.call('Get', {
+    typeName: 'LogRecord',
+    search: {
+      deviceSearch: { id: 'b1' },
+      fromDate: '2024-01-15T00:00:00.000Z',
+      toDate:   '2024-01-15T23:59:59.000Z'
+    },
+    resultsLimit: 50000  // hard max
+  });
+
+  // Continuous streaming via GetFeed:
+  let fromVersion = null;
+  const feed = await api.call('GetFeed', {
+    typeName: 'LogRecord', fromVersion, resultsLimit: 50000
+  });
+  fromVersion = feed.toVersion; // save this for next poll
+})();`,
   },
   {
     id: "diagnostics", label: "Diagnostics & sensor data", icon: "ti-settings-2",
@@ -101,7 +131,18 @@ fromVersion = feed.toVersion; // save this for next poll`,
       { type: "info", text: "Aux inputs 2/3/4 = DiagnosticGoInputStatus2Id, 3Id, 4Id." },
       { type: "tip",  text: "DeviceStatusInfo.StatusData gives a snapshot of latest values — use that for dashboards." },
     ],
-    code: `// Common Diagnostic IDs:
+    code: `const GeotabApi = require('mg-api-js');
+
+const api = new GeotabApi({
+  credentials: {
+    userName: process.env.GEOTAB_USER,
+    password: process.env.GEOTAB_PASS,
+    database: process.env.GEOTAB_DB,
+  },
+  path: 'my.geotab.com',
+}, { rememberMe: true });
+
+// Common Diagnostic IDs:
 // DiagnosticGoInputStatusId          → Aux input 1  (0=off, 1=on)
 // DiagnosticGoInputStatus2Id         → Aux input 2
 // DiagnosticGoInputStatus3Id         → Aux input 3
@@ -110,27 +151,31 @@ fromVersion = feed.toVersion; // save this for next poll`,
 // DiagnosticEngineHoursAdjustmentId  → Engine hours (seconds)
 // DiagnosticFuelLevelId              → Fuel level (%)
 
-// Get aux input 1 state for all vehicles
-const auxData = await api.call('Get', {
-  typeName: 'StatusData',
-  search: {
-    diagnosticSearch: { id: 'DiagnosticGoInputStatusId' },
-    fromDate: new Date(Date.now() - 3_600_000).toISOString()
-  }
-});
-// auxData[i].data === 1 → input ON
-// auxData[i].data === 0 → input OFF
+(async () => {
+  await api.authenticate();
 
-// Get latest odometer for a specific vehicle
-const odo = await api.call('Get', {
-  typeName: 'StatusData',
-  search: {
-    deviceSearch: { id: 'b1' },
-    diagnosticSearch: { id: 'DiagnosticOdometerAdjustmentId' }
-  },
-  resultsLimit: 1
-});
-// odo[0].data / 1000 → km`,
+  // Get aux input 1 state for all vehicles
+  const auxData = await api.call('Get', {
+    typeName: 'StatusData',
+    search: {
+      diagnosticSearch: { id: 'DiagnosticGoInputStatusId' },
+      fromDate: new Date(Date.now() - 3_600_000).toISOString()
+    }
+  });
+  // auxData[i].data === 1 → input ON
+  // auxData[i].data === 0 → input OFF
+
+  // Get latest odometer for a specific vehicle
+  const odo = await api.call('Get', {
+    typeName: 'StatusData',
+    search: {
+      deviceSearch: { id: 'b1' },
+      diagnosticSearch: { id: 'DiagnosticOdometerAdjustmentId' }
+    },
+    resultsLimit: 1
+  });
+  // odo[0].data / 1000 → km
+})();`,
   },
   {
     id: "faults", label: "Fault codes (DTCs)", icon: "ti-alert-hexagon",
@@ -150,27 +195,42 @@ const odo = await api.call('Get', {
       { type: "info", text: "diagnostic.name gives the human-readable description; diagnostic.code is the numeric code." },
       { type: "warn", text: "GetFeed(FaultData) only filters by FromDate — DeviceSearch is ignored in feed mode." },
     ],
-    code: `// Get active fault codes for a vehicle
-const faults = await api.call('Get', {
-  typeName: 'FaultData',
-  search: {
-    deviceSearch: { id: 'b1' },
-    faultStates: ['Active']  // Active | Pending | NotActive
-  }
-});
+    code: `const GeotabApi = require('mg-api-js');
 
-// faults[i].diagnostic.name   → "Engine Coolant Temperature"
-// faults[i].diagnostic.code   → 110
-// faults[i].faultState        → 'Active'
-// faults[i].amberWarningLamp  → true (MIL on)
-// faults[i].count             → 3 (occurred 3 times)
+const api = new GeotabApi({
+  credentials: {
+    userName: process.env.GEOTAB_USER,
+    password: process.env.GEOTAB_PASS,
+    database: process.env.GEOTAB_DB,
+  },
+  path: 'my.geotab.com',
+}, { rememberMe: true });
 
-// Real-time fault monitoring via GetFeed:
-let fromVersion = null;
-const feed = await api.call('GetFeed', {
-  typeName: 'FaultData', fromVersion
-});
-fromVersion = feed.toVersion;`,
+(async () => {
+  await api.authenticate();
+
+  // Get active fault codes for a vehicle
+  const faults = await api.call('Get', {
+    typeName: 'FaultData',
+    search: {
+      deviceSearch: { id: 'b1' },
+      faultStates: ['Active']  // Active | Pending | NotActive
+    }
+  });
+
+  // faults[i].diagnostic.name   → "Engine Coolant Temperature"
+  // faults[i].diagnostic.code   → 110
+  // faults[i].faultState        → 'Active'
+  // faults[i].amberWarningLamp  → true (MIL on)
+  // faults[i].count             → 3 (occurred 3 times)
+
+  // Real-time fault monitoring via GetFeed:
+  let fromVersion = null;
+  const feed = await api.call('GetFeed', {
+    typeName: 'FaultData', fromVersion
+  });
+  fromVersion = feed.toVersion;
+})();`,
   },
   {
     id: "trips", label: "Trip history", icon: "ti-car",
@@ -190,29 +250,44 @@ fromVersion = feed.toVersion;`,
       { type: "warn", text: "GetFeed(Trip) ignores DeviceSearch — you'll get all trips for the database." },
       { type: "tip",  text: "Trip has start/end coords only. Query LogRecord with trip times for the full GPS path." },
     ],
-    code: `// Get last 10 trips for a vehicle
-const trips = await api.call('Get', {
-  typeName: 'Trip',
-  search: {
-    deviceSearch: { id: 'b1' },
-    fromDate: new Date(Date.now() - 7 * 86_400_000).toISOString()
-  },
-  resultsLimit: 10
-});
-// trips[i].distance       → km
-// trips[i].maxSpeed       → peak km/h
-// trips[i].driver.id      → driver ID
-// trips[i].start / .stop  → ISO datetime strings
+    code: `const GeotabApi = require('mg-api-js');
 
-// Get full GPS path for a specific trip:
-const path = await api.call('Get', {
-  typeName: 'LogRecord',
-  search: {
-    deviceSearch: { id: trips[0].device.id },
-    fromDate: trips[0].start,
-    toDate:   trips[0].stop
-  }
-});`,
+const api = new GeotabApi({
+  credentials: {
+    userName: process.env.GEOTAB_USER,
+    password: process.env.GEOTAB_PASS,
+    database: process.env.GEOTAB_DB,
+  },
+  path: 'my.geotab.com',
+}, { rememberMe: true });
+
+(async () => {
+  await api.authenticate();
+
+  // Get last 10 trips for a vehicle
+  const trips = await api.call('Get', {
+    typeName: 'Trip',
+    search: {
+      deviceSearch: { id: 'b1' },
+      fromDate: new Date(Date.now() - 7 * 86_400_000).toISOString()
+    },
+    resultsLimit: 10
+  });
+  // trips[i].distance       → km
+  // trips[i].maxSpeed       → peak km/h
+  // trips[i].driver.id      → driver ID
+  // trips[i].start / .stop  → ISO datetime strings
+
+  // Get full GPS path for a specific trip:
+  const path = await api.call('Get', {
+    typeName: 'LogRecord',
+    search: {
+      deviceSearch: { id: trips[0].device.id },
+      fromDate: trips[0].start,
+      toDate:   trips[0].stop
+    }
+  });
+})();`,
   },
 ];
 
@@ -239,78 +314,121 @@ const MULTICALL_EXAMPLES = [
     desc: "Load devices + live status + groups in a single HTTP request",
     savings: "3 → 1",
     when: "Any time you need data from multiple entity types simultaneously",
-    code: `// Without multiCall: 3 HTTP requests, 3× latency
-// With multiCall: 1 HTTP request, parallel execution on server
+    code: `const GeotabApi = require('mg-api-js');
 
-const [devices, statuses, groups] = await api.multiCall([
-  ['Get', { typeName: 'Device', search: {} }],
-  ['Get', { typeName: 'DeviceStatusInfo', search: {} }],
-  ['Get', { typeName: 'Group', search: {} }]
-]);
+const api = new GeotabApi({
+  credentials: {
+    userName: process.env.GEOTAB_USER,
+    password: process.env.GEOTAB_PASS,
+    database: process.env.GEOTAB_DB,
+  },
+  path: 'my.geotab.com',
+}, { rememberMe: true });
 
-// Results return in the same order as the calls
-// Merge device list with live status:
-const statusById = Object.fromEntries(
-  statuses.map(s => [s.device.id, s])
-);
-const fleet = devices.map(d => ({
-  ...d,
-  live: statusById[d.id]   // attach live data
-}));`,
+(async () => {
+  await api.authenticate();
+
+  // Without multiCall: 3 HTTP requests, 3× latency
+  // With multiCall: 1 HTTP request, parallel execution on server
+  const [devices, statuses, groups] = await api.multiCall([
+    ['Get', { typeName: 'Device', search: {} }],
+    ['Get', { typeName: 'DeviceStatusInfo', search: {} }],
+    ['Get', { typeName: 'Group', search: {} }]
+  ]);
+
+  // Results return in the same order as the calls.
+  // Merge device list with live status:
+  const statusById = Object.fromEntries(
+    statuses.map(s => [s.device.id, s])
+  );
+  const fleet = devices.map(d => ({
+    ...d,
+    live: statusById[d.id]   // attach live data
+  }));
+})();`,
   },
   {
     title: "Vehicle detail page",
     desc: "Everything about one vehicle: device info, live status, active faults, recent trips",
     savings: "4 → 1",
     when: "Opening a vehicle detail page — you need several entity types at once",
-    code: `const id = 'b1';  // vehicle ID
+    code: `const GeotabApi = require('mg-api-js');
 
-const [device, status, faults, trips] = await api.multiCall([
-  ['Get', { typeName: 'Device',
-            search: { id } }],
-  ['Get', { typeName: 'DeviceStatusInfo',
-            search: { deviceSearch: { id } } }],
-  ['Get', { typeName: 'FaultData',
-            search: { deviceSearch: { id }, faultStates: ['Active'] } }],
-  ['Get', { typeName: 'Trip',
-            search: { deviceSearch: { id } },
-            resultsLimit: 5 }]
-]);
+const api = new GeotabApi({
+  credentials: {
+    userName: process.env.GEOTAB_USER,
+    password: process.env.GEOTAB_PASS,
+    database: process.env.GEOTAB_DB,
+  },
+  path: 'my.geotab.com',
+}, { rememberMe: true });
 
-// device[0]  → device object with name, serial, groups
-// status[0]  → live bearing, speed, driver, isDriving
-// faults     → active DTC list
-// trips      → 5 most recent completed trips`,
+(async () => {
+  await api.authenticate();
+  const id = 'b1';  // vehicle ID
+
+  const [device, status, faults, trips] = await api.multiCall([
+    ['Get', { typeName: 'Device',
+              search: { id } }],
+    ['Get', { typeName: 'DeviceStatusInfo',
+              search: { deviceSearch: { id } } }],
+    ['Get', { typeName: 'FaultData',
+              search: { deviceSearch: { id }, faultStates: ['Active'] } }],
+    ['Get', { typeName: 'Trip',
+              search: { deviceSearch: { id } },
+              resultsLimit: 5 }]
+  ]);
+
+  // device[0]  → device object with name, serial, groups
+  // status[0]  → live bearing, speed, driver, isDriving
+  // faults     → active DTC list
+  // trips      → 5 most recent completed trips
+})();`,
   },
   {
     title: "Diagnostics snapshot for fleet",
     desc: "Fetch multiple diagnostic types for all vehicles at once",
     savings: "3 → 1",
     when: "Building a fleet health dashboard with multiple sensor readings",
-    code: `const [odometers, fuelLevels, auxInputs] = await api.multiCall([
-  ['Get', {
-    typeName: 'StatusData',
-    search: {
-      diagnosticSearch: { id: 'DiagnosticOdometerAdjustmentId' }
-    }
-  }],
-  ['Get', {
-    typeName: 'StatusData',
-    search: {
-      diagnosticSearch: { id: 'DiagnosticFuelLevelId' }
-    }
-  }],
-  ['Get', {
-    typeName: 'StatusData',
-    search: {
-      diagnosticSearch: { id: 'DiagnosticGoInputStatusId' }
-    }
-  }]
-]);
+    code: `const GeotabApi = require('mg-api-js');
 
-// odometers[i].data / 1000  → km
-// fuelLevels[i].data        → % (0-100)
-// auxInputs[i].data         → 0 or 1`,
+const api = new GeotabApi({
+  credentials: {
+    userName: process.env.GEOTAB_USER,
+    password: process.env.GEOTAB_PASS,
+    database: process.env.GEOTAB_DB,
+  },
+  path: 'my.geotab.com',
+}, { rememberMe: true });
+
+(async () => {
+  await api.authenticate();
+
+  const [odometers, fuelLevels, auxInputs] = await api.multiCall([
+    ['Get', {
+      typeName: 'StatusData',
+      search: {
+        diagnosticSearch: { id: 'DiagnosticOdometerAdjustmentId' }
+      }
+    }],
+    ['Get', {
+      typeName: 'StatusData',
+      search: {
+        diagnosticSearch: { id: 'DiagnosticFuelLevelId' }
+      }
+    }],
+    ['Get', {
+      typeName: 'StatusData',
+      search: {
+        diagnosticSearch: { id: 'DiagnosticGoInputStatusId' }
+      }
+    }]
+  ]);
+
+  // odometers[i].data / 1000  → km
+  // fuelLevels[i].data        → % (0-100)
+  // auxInputs[i].data         → 0 or 1
+})();`,
   },
 ];
 
@@ -442,7 +560,6 @@ export default function GeotabInspector() {
     { id: "fieldmap", label: "Field map", icon: "ti-table" },
     { id: "multicall", label: "Multicall", icon: "ti-stack-2" },
     { id: "ratelimits", label: "Rate limits", icon: "ti-gauge" },
-    { id: "ask", label: "Ask Claude", icon: "ti-message-circle" },
   ];
 
   const tabStyle = (id) => ({
@@ -485,9 +602,9 @@ export default function GeotabInspector() {
 
       {/* ── Tab: Use Cases ─────────────────────────────────────────────── */}
       {tab === "usecases" && (
-        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16, minHeight: 500 }}>
+        <div className="inspector-usecases-grid" style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16, minHeight: 500 }}>
           {/* Sidebar */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="inspector-case-sidebar" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {CASES.map(c => (
               <button key={c.id} onClick={() => setCaseId(c.id)} style={{
                 display: "flex", alignItems: "center", gap: 8,
@@ -496,6 +613,7 @@ export default function GeotabInspector() {
                 color: caseId === c.id ? c.accentColor : "var(--color-text-secondary)",
                 border: `0.5px solid ${caseId === c.id ? c.accentBorder : "transparent"}`,
                 fontSize: 13, fontWeight: caseId === c.id ? 500 : 400, transition: "all 0.15s",
+                whiteSpace: "nowrap",
               }}>
                 <i className={`ti ${c.icon}`} style={{ fontSize: 15, flexShrink: 0 }} aria-hidden="true" />
                 <span>{c.label}</span>
@@ -523,7 +641,7 @@ export default function GeotabInspector() {
                 <div style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Fields available</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {activeCase.fields.map((f, i) => (
-                    <div key={i} style={{
+                    <div key={i} className="inspector-field-row" style={{
                       display: "flex", alignItems: "flex-start", gap: 10,
                       padding: "7px 10px", borderRadius: 6,
                       background: f.highlight ? activeCase.accentBg : "var(--color-background-secondary)",

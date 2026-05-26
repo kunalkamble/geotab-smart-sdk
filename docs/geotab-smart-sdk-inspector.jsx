@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import pkg from "../package.json";
 
 const CASES = [
   {
@@ -28,39 +29,41 @@ const CASES = [
     ],
     code: `const { GeotabSDK } = require('geotab-smart-sdk');
 
-// ── First run: authenticate with a password ─────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+//  THE SIMPLE CASE — covers ~90% of apps.
+//  Construct, connect, and forget. The SDK keeps the session alive,
+//  refreshes it transparently on InvalidUserException, and retries the
+//  failed call. You never have to think about it.
+// ─────────────────────────────────────────────────────────────────────
+
 const sdk = new GeotabSDK({
   username: process.env.GEOTAB_USER,
   password: process.env.GEOTAB_PASS,
   database: process.env.GEOTAB_DB,
-  server:   process.env.GEOTAB_SERVER,         // optional
+  server:   process.env.GEOTAB_SERVER,         // optional, default 'my.geotab.com'
 }, {
-  cacheTtlMs: 60 * 60 * 1000,                  // optional
+  cacheTtlMs: 60 * 60 * 1000,                  // optional, default 1h
   readOnly:   false,                           // default; set true for sandboxes
 });
 
-await sdk.connect({ cacheDevices: true });
-// or scope: await sdk.connect({ cacheGroups: ['groupCompanyId'] });
+async function main() {
+  await sdk.connect({ cacheDevices: true });
+  // or scope: await sdk.connect({ cacheGroups: ['groupCompanyId'] });
 
-// Capture the session for next time — sessionId is valid up to 14 days.
-const session = sdk.getSession();
-// → { sessionId, userName, database, server }
-fs.writeFileSync('session.json', JSON.stringify(session));
+  // Every call from here on reuses the same session automatically.
+  await sdk.call('Get', { typeName: 'Device' });
+  await sdk.call('Get', { typeName: 'DeviceStatusInfo' });
+}
 
-// ── Next run (or restart): resume without the password ─────────────
-const saved = JSON.parse(fs.readFileSync('session.json', 'utf8'));
-const sdk2 = new GeotabSDK({
-  username:  saved.userName,
-  database:  saved.database,
-  sessionId: saved.sessionId,                  // password not needed
-  server:    saved.server,
-});
-await sdk2.connect();
+main().catch((err) => { console.error(err); process.exit(1); });
 
-// ── Read-only sandbox SDK (e.g. for a public demo / UI) ────────────
-const safe = new GeotabSDK({ username, password, database }, { readOnly: true });
-await safe.call('Get', { typeName: 'Device' });   // ✓ allowed
-await safe.call('Set', { typeName: 'Group' });    // ✗ ReadOnlyViolation`,
+// ─────────────────────────────────────────────────────────────────────
+//  OPTIONAL — session persistence across process restarts.
+//  Only useful if your process restarts often (CLI / desktop / Lambda).
+//  Run once with a password, persist getSession(), then on the NEXT
+//  process invocation construct a new SDK with sessionId instead.
+//  See the "Session persistence" cheat-sheet entry for the full pattern.
+// ─────────────────────────────────────────────────────────────────────`,
   },
   {
     id: "live", label: "Live tracking (DSI)", icon: "ti-map-pin",
@@ -84,34 +87,44 @@ await safe.call('Set', { typeName: 'Group' });    // ✗ ReadOnlyViolation`,
       { type: "tip",  text: "Pass .forGroups(['groupCompanyId']) to narrow the payload server-side. Geotab applies the filter to DSI, StatusData, and FaultData in one shot." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
-const sdk = new GeotabSDK({ /* ... */ });
 
-const tracker = sdk.liveTracker()
-  .withDiagnostics([
-    Diagnostics.FUEL_LEVEL,
-    Diagnostics.ODOMETER,
-    Diagnostics.AUX_INPUT_1,
-  ])
-  .withFaults()
-  .forGroups(['groupCompanyId'])   // optional — server-side
-  .forDevices(['b1', 'b2'])        // optional — narrows further (intersection)
-  .pollEvery(5000);
-
-tracker.on('update', vehicles => {
-  for (const v of vehicles) {
-    console.log(v.device.name);
-    console.log(v.location.bearing);   // heading in degrees
-    console.log(v.isDriving, v.isConnected);
-    console.log(v.driver?.name);
-    console.log(v.diagnostics[Diagnostics.FUEL_LEVEL]?.value);
-    console.log(v.faults);              // active DTCs
-  }
+const sdk = new GeotabSDK({
+  username: process.env.GEOTAB_USER,
+  password: process.env.GEOTAB_PASS,
+  database: process.env.GEOTAB_DB,
 });
-tracker.on('error', err => console.error(err));
 
-await tracker.start();
-// ... later:
-tracker.stop();`,
+async function main() {
+  await sdk.connect({ cacheDevices: true });
+
+  const tracker = sdk.liveTracker()
+    .withDiagnostics([
+      Diagnostics.FUEL_LEVEL,
+      Diagnostics.ODOMETER,
+      Diagnostics.AUX_INPUT_1,
+    ])
+    .withFaults()
+    .forGroups(['groupCompanyId'])   // optional — server-side
+    .forDevices(['b1', 'b2'])        // optional — narrows further (intersection)
+    .pollEvery(5000);
+
+  tracker.on('update', vehicles => {
+    for (const v of vehicles) {
+      console.log(v.device.name);
+      console.log(v.location.bearing);   // heading in degrees
+      console.log(v.isDriving, v.isConnected);
+      console.log(v.driver?.name);
+      console.log(v.diagnostics[Diagnostics.FUEL_LEVEL]?.value);
+      console.log(v.faults);              // active DTCs
+    }
+  });
+  tracker.on('error', err => console.error(err));
+
+  await tracker.start();
+  // ... later: tracker.stop();
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });`,
   },
   {
     id: "realtime", label: "Realtime tracking (LogRecord)", icon: "ti-broadcast",
@@ -138,33 +151,43 @@ tracker.stop();`,
       { type: "warn", text: "Devices added to the fleet after .start() won't appear in the device cache and will be silently dropped by the LogRecord group filter. Recreate the tracker or refresh the cache if your fleet changes." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
-const sdk = new GeotabSDK({ /* ... */ });
 
-const tracker = sdk.realtimeTracker()
-  .withDiagnostics([Diagnostics.FUEL_LEVEL])
-  .withIgnition()                  // recommended
-  .withDriverAttribution()         // recommended
-  .withFaults()
-  .forGroups(['groupCompanyId'])   // optional — server-side + cache-based
-  .pollEvery(5_000);               // business default
-
-tracker.on('update', vehicles => {
-  for (const v of vehicles) {
-    console.log(v.device.name);
-    console.log(v.location.bearing);  // computed, may be null on first fix
-    console.log(v.location.speed);    // null if invalid-speed sentinel
-    console.log(v.isDriving);         // from ignition + speed
-    console.log(v.driver?.name);      // from DriverChange
-    console.log(v.ignition?.value);   // raw ignition reading
-    console.log(v.diagnostics[Diagnostics.FUEL_LEVEL]?.value);
-    console.log(v.faults);
-  }
+const sdk = new GeotabSDK({
+  username: process.env.GEOTAB_USER,
+  password: process.env.GEOTAB_PASS,
+  database: process.env.GEOTAB_DB,
 });
-tracker.on('error', err => console.error(err));
 
-await tracker.start();
-// ... later:
-tracker.stop();`,
+async function main() {
+  await sdk.connect({ cacheDevices: true });
+
+  const tracker = sdk.realtimeTracker()
+    .withDiagnostics([Diagnostics.FUEL_LEVEL])
+    .withIgnition()                  // recommended
+    .withDriverAttribution()         // recommended
+    .withFaults()
+    .forGroups(['groupCompanyId'])   // optional — server-side + cache-based
+    .pollEvery(5_000);               // business default
+
+  tracker.on('update', vehicles => {
+    for (const v of vehicles) {
+      console.log(v.device.name);
+      console.log(v.location.bearing);  // computed, may be null on first fix
+      console.log(v.location.speed);    // null if invalid-speed sentinel
+      console.log(v.isDriving);         // from ignition + speed
+      console.log(v.driver?.name);      // from DriverChange
+      console.log(v.ignition?.value);   // raw ignition reading
+      console.log(v.diagnostics[Diagnostics.FUEL_LEVEL]?.value);
+      console.log(v.faults);
+    }
+  });
+  tracker.on('error', err => console.error(err));
+
+  await tracker.start();
+  // ... later: tracker.stop();
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });`,
   },
   {
     id: "history", label: "Historical query", icon: "ti-route",
@@ -188,35 +211,48 @@ tracker.stop();`,
       { type: "warn", text: "historyByGroups fans out one multiCall per device. Large groups (hundreds of devices) produce wide parallel fan-out — chunk the device list yourself if needed." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
-const sdk = new GeotabSDK({ /* ... */ });
 
-const data = await sdk.history({
-  deviceId: 'b1',
-  from: new Date('2024-01-15T00:00:00Z'),
-  to:   new Date('2024-01-15T23:59:59Z'),
-  include: {
-    gps:         true,
-    trips:       true,
-    faults:      true,
-    diagnostics: [Diagnostics.FUEL_LEVEL, Diagnostics.AUX_INPUT_1],
-  },
-  computeBearing: true,
+const sdk = new GeotabSDK({
+  username: process.env.GEOTAB_USER,
+  password: process.env.GEOTAB_PASS,
+  database: process.env.GEOTAB_DB,
 });
 
-data.gps.forEach(p => console.log(p.latitude, p.longitude, p.bearing));
-data.trips.forEach(t => console.log(t.distance, t.maxSpeed));
-data.faults.forEach(f => console.log(f.faultState, f.diagnostic?.name));
-data.diagnostics[Diagnostics.FUEL_LEVEL]; // StatusData[]
+async function main() {
+  await sdk.connect();
 
-// Parallel across vehicles
-const results = await sdk.historyMany(['b1', 'b2', 'b3'], {
-  from, to, include: { gps: true, faults: true },
-});
+  const from = new Date('2024-01-15T00:00:00Z');
+  const to   = new Date('2024-01-15T23:59:59Z');
 
-// Or: every device in a group, resolved automatically
-const groupResults = await sdk.historyByGroups(['groupCompanyId'], {
-  from, to, include: { gps: true, faults: true },
-});`,
+  const data = await sdk.history({
+    deviceId: 'b1',
+    from, to,
+    include: {
+      gps:         true,
+      trips:       true,
+      faults:      true,
+      diagnostics: [Diagnostics.FUEL_LEVEL, Diagnostics.AUX_INPUT_1],
+    },
+    computeBearing: true,
+  });
+
+  data.gps.forEach(p => console.log(p.latitude, p.longitude, p.bearing));
+  data.trips.forEach(t => console.log(t.distance, t.maxSpeed));
+  data.faults.forEach(f => console.log(f.faultState, f.diagnostic?.name));
+  data.diagnostics[Diagnostics.FUEL_LEVEL]; // StatusData[]
+
+  // Parallel across vehicles
+  const results = await sdk.historyMany(['b1', 'b2', 'b3'], {
+    from, to, include: { gps: true, faults: true },
+  });
+
+  // Or: every device in a group, resolved automatically
+  const groupResults = await sdk.historyByGroups(['groupCompanyId'], {
+    from, to, include: { gps: true, faults: true },
+  });
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });`,
   },
   {
     id: "snapshot", label: "Fleet snapshot", icon: "ti-dashboard",
@@ -238,26 +274,37 @@ const groupResults = await sdk.historyByGroups(['groupCompanyId'], {
       { type: "warn", text: "recentTrips fetches the last 7 days globally and groups client-side — heavy fleets may want a custom query." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
-const sdk = new GeotabSDK({ /* ... */ });
 
-const fleet = await sdk.fleetSnapshot({
-  include: {
-    devices:      true,
-    liveStatus:   true,
-    activeFaults: true,
-    diagnostics:  [Diagnostics.FUEL_LEVEL, Diagnostics.ODOMETER],
-    recentTrips:  3,
-  },
-  // groupIds: ['groupCompanyId'],  // optional
+const sdk = new GeotabSDK({
+  username: process.env.GEOTAB_USER,
+  password: process.env.GEOTAB_PASS,
+  database: process.env.GEOTAB_DB,
 });
 
-console.log(fleet.summary);
-// { total: 45, driving: 12, stopped: 28, disconnected: 5, withActiveFaults: 3 }
+async function main() {
+  await sdk.connect({ cacheDevices: true });
 
-fleet.liveStatus.get('b1').bearing;
-fleet.faults.get('b1');                                  // FaultData[]
-fleet.diagnostics[Diagnostics.FUEL_LEVEL].get('b1').data;
-fleet.recentTrips.get('b1');                             // Trip[]`,
+  const fleet = await sdk.fleetSnapshot({
+    include: {
+      devices:      true,
+      liveStatus:   true,
+      activeFaults: true,
+      diagnostics:  [Diagnostics.FUEL_LEVEL, Diagnostics.ODOMETER],
+      recentTrips:  3,
+    },
+    // groupIds: ['groupCompanyId'],  // optional
+  });
+
+  console.log(fleet.summary);
+  // { total: 45, driving: 12, stopped: 28, disconnected: 5, withActiveFaults: 3 }
+
+  fleet.liveStatus.get('b1')?.bearing;
+  fleet.faults.get('b1');                                   // FaultData[]
+  fleet.diagnostics[Diagnostics.FUEL_LEVEL].get('b1')?.data;
+  fleet.recentTrips.get('b1');                              // Trip[]
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });`,
   },
   {
     id: "feeds", label: "Continuous sync", icon: "ti-arrows-double-ne-sw",
@@ -279,161 +326,246 @@ fleet.recentTrips.get('b1');                             // Trip[]`,
       { type: "tip",  text: "Adaptive polling: immediate after a full batch (more data waiting), back off progressively when empty. No tuning needed." },
     ],
     code: `const { GeotabSDK } = require('geotab-smart-sdk');
-const sdk = new GeotabSDK({ /* ... */ });
 
-const saved = await db.loadTokens();
+const sdk = new GeotabSDK({
+  username: process.env.GEOTAB_USER,
+  password: process.env.GEOTAB_PASS,
+  database: process.env.GEOTAB_DB,
+});
 
-const feeds = sdk.feeds()
-  .addFeed('LogRecord',  { fromVersion: saved.LogRecord })
-  .addFeed('StatusData', { fromVersion: saved.StatusData })
-  .addFeed('FaultData',  { fromDate: new Date('2024-01-15') }); // first run only
+// Replace these with your own persistence layer.
+const db = {
+  loadTokens: async () => ({ LogRecord: null, StatusData: null }),
+  saveToken:  async (type, token)   => { /* upsert into your store */ },
+  insert:     async (type, records) => { /* bulk insert */ },
+};
+const logger = { error: (...args) => console.error(...args) };
 
-// CRITICAL: save the token BEFORE processing
-feeds.on('version', (type, token)   => db.saveToken(type, token));
-feeds.on('data',    (type, records) => db.insert(type, records));
-feeds.on('error',   (type, err)     => logger.error(type, err));
+async function main() {
+  await sdk.connect();
 
-feeds.start();
-// ... later:
-feeds.stop();`,
+  const saved = await db.loadTokens();
+
+  const feeds = sdk.feeds()
+    .addFeed('LogRecord',  { fromVersion: saved.LogRecord })
+    .addFeed('StatusData', { fromVersion: saved.StatusData })
+    .addFeed('FaultData',  { fromDate: new Date('2024-01-15') }); // first run only
+
+  // CRITICAL: save the token BEFORE processing.
+  feeds.on('version', (type, token)   => db.saveToken(type, token));
+  feeds.on('data',    (type, records) => db.insert(type, records));
+  feeds.on('error',   (type, err)     => logger.error(type, err));
+
+  feeds.start();
+  // ... later: feeds.stop();
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });`,
   },
 ];
 
 const COMPARISONS = [
   {
     title: "Session + automatic re-auth",
-    raw: `const api = new GeotabApi({ ... }, { rememberMe: true });
+    raw: `const GeotabApi = require('mg-api-js');
+const api = new GeotabApi({ /* credentials */ }, { rememberMe: true });
 
-// You catch InvalidUserException and re-auth manually:
-try {
-  await api.call('Get', { typeName: 'Device' });
-} catch (err) {
-  if (err.code === 'InvalidUserException') {
-    await api.authenticate();
-    return api.call('Get', { typeName: 'Device' });
+(async () => {
+  // You catch InvalidUserException and re-auth manually:
+  try {
+    await api.call('Get', { typeName: 'Device' });
+  } catch (err) {
+    if (err.code === 'InvalidUserException') {
+      await api.authenticate();
+      return api.call('Get', { typeName: 'Device' });
+    }
+    throw err;
   }
-  throw err;
-}`,
-    sdk: `const sdk = new GeotabSDK({ /* ... */ });
+})();`,
+    sdk: `const { GeotabSDK } = require('geotab-smart-sdk');
+const sdk = new GeotabSDK({ /* credentials */ });
 
-// Session expiry is handled inside .call() / .multiCall().
-// You just write the call.
-await sdk.call('Get', { typeName: 'Device' });`,
+(async () => {
+  // Session expiry is handled inside .call() / .multiCall().
+  // You just write the call.
+  await sdk.connect();
+  await sdk.call('Get', { typeName: 'Device' });
+})();`,
     win: "No InvalidUserException loop. No re-auth branching in your code.",
   },
   {
     title: "Live tracking with diagnostics + faults",
-    raw: `// Poll DeviceStatusInfo + StatusData(fuel) + FaultData + merge by device.id
-setInterval(async () => {
-  const [statuses, fuel, faults] = await api.multiCall([
-    ['Get', { typeName: 'DeviceStatusInfo', search: {} }],
-    ['Get', { typeName: 'StatusData',
-              search: { diagnosticSearch: { id: 'DiagnosticFuelLevelId' } } }],
-    ['Get', { typeName: 'FaultData',
-              search: { faultStates: ['Active'] } }],
-  ]);
-  const fuelByDev = new Map();
-  for (const r of fuel) {
-    if (!fuelByDev.has(r.device.id) ||
-        new Date(r.dateTime) > new Date(fuelByDev.get(r.device.id).dateTime))
-      fuelByDev.set(r.device.id, r);
-  }
-  const faultsByDev = new Map();
-  for (const f of faults) {
-    (faultsByDev.get(f.device.id) ?? faultsByDev.set(f.device.id, []).get(f.device.id))
-      .push(f);
-  }
-  // ... finally, walk statuses[]  and stitch everything together
-}, 5000);`,
-    sdk: `sdk.liveTracker()
-  .withDiagnostics([Diagnostics.FUEL_LEVEL])
-  .withFaults()
-  .pollEvery(5000)
-  .on('update', vehicles => {
-    // already merged — v.diagnostics[id].value and v.faults[]
-  })
-  .start();`,
+    raw: `const GeotabApi = require('mg-api-js');
+const api = new GeotabApi({ /* credentials */ }, { rememberMe: true });
+
+(async () => {
+  await api.authenticate();
+  // Poll DeviceStatusInfo + StatusData(fuel) + FaultData + merge by device.id
+  setInterval(async () => {
+    const [statuses, fuel, faults] = await api.multiCall([
+      ['Get', { typeName: 'DeviceStatusInfo', search: {} }],
+      ['Get', { typeName: 'StatusData',
+                search: { diagnosticSearch: { id: 'DiagnosticFuelLevelId' } } }],
+      ['Get', { typeName: 'FaultData',
+                search: { faultStates: ['Active'] } }],
+    ]);
+    const fuelByDev = new Map();
+    for (const r of fuel) {
+      if (!fuelByDev.has(r.device.id) ||
+          new Date(r.dateTime) > new Date(fuelByDev.get(r.device.id).dateTime))
+        fuelByDev.set(r.device.id, r);
+    }
+    const faultsByDev = new Map();
+    for (const f of faults) {
+      (faultsByDev.get(f.device.id) ?? faultsByDev.set(f.device.id, []).get(f.device.id))
+        .push(f);
+    }
+    // ... finally, walk statuses[] and stitch everything together
+  }, 5000);
+})();`,
+    sdk: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
+const sdk = new GeotabSDK({ /* credentials */ });
+
+(async () => {
+  await sdk.connect({ cacheDevices: true });
+  sdk.liveTracker()
+    .withDiagnostics([Diagnostics.FUEL_LEVEL])
+    .withFaults()
+    .pollEvery(5000)
+    .on('update', vehicles => {
+      // already merged — v.diagnostics[id].value and v.faults[]
+    })
+    .start();
+})();`,
     win: "Fluent builder. Merging, latest-value per device, and fault grouping are built in.",
   },
   {
     title: "GetFeed with crash-safe token rotation",
-    raw: `let fromVersion = await db.loadToken('LogRecord');
+    raw: `const GeotabApi = require('mg-api-js');
+const api = new GeotabApi({ /* credentials */ }, { rememberMe: true });
+const db = { loadToken: async () => null, saveToken: async () => {} };
+const process = async (records) => { /* your insert */ };
 
-async function poll() {
-  const { data, toVersion } = await api.call('GetFeed', {
-    typeName: 'LogRecord', fromVersion, resultsLimit: 50000,
-  });
-  // Easy to forget: save the token BEFORE processing
-  await db.saveToken('LogRecord', toVersion);
-  fromVersion = toVersion;
-  await process(data);
-  // Your own adaptive interval logic:
-  const next = data.length >= 50000 ? 0
-            : data.length === 0     ? Math.min(prev * 2, 30000)
-                                    : 1000;
-  setTimeout(poll, next);
-}
-poll();`,
-    sdk: `const feeds = sdk.feeds()
-  .addFeed('LogRecord', { fromVersion: await db.loadToken('LogRecord') });
+(async () => {
+  await api.authenticate();
+  let fromVersion = await db.loadToken('LogRecord');
+  let prev = 1000;
 
-feeds.on('version', (t, token) => db.saveToken(t, token)); // BEFORE data
-feeds.on('data',    (t, records) => process(records));
-feeds.on('error',   (t, err) => logger.error(t, err));
+  async function poll() {
+    const { data, toVersion } = await api.call('GetFeed', {
+      typeName: 'LogRecord', fromVersion, resultsLimit: 50000,
+    });
+    // Easy to forget: save the token BEFORE processing.
+    await db.saveToken('LogRecord', toVersion);
+    fromVersion = toVersion;
+    await process(data);
+    // Your own adaptive interval logic:
+    const next = data.length >= 50000 ? 0
+              : data.length === 0     ? Math.min(prev * 2, 30000)
+                                      : 1000;
+    prev = next;
+    setTimeout(poll, next);
+  }
+  poll();
+})();`,
+    sdk: `const { GeotabSDK } = require('geotab-smart-sdk');
+const sdk = new GeotabSDK({ /* credentials */ });
+const db = { loadToken: async () => null, saveToken: async () => {} };
+const logger = { error: (...a) => console.error(...a) };
+const process = (records) => { /* your insert */ };
 
-feeds.start();`,
+(async () => {
+  await sdk.connect();
+
+  const feeds = sdk.feeds()
+    .addFeed('LogRecord', { fromVersion: await db.loadToken('LogRecord') });
+
+  feeds.on('version', (t, token)   => db.saveToken(t, token)); // BEFORE data
+  feeds.on('data',    (t, records) => process(records));
+  feeds.on('error',   (t, err)     => logger.error(t, err));
+
+  feeds.start();
+})();`,
     win: "Token saved before data event. Adaptive backoff and error backoff handled internally.",
   },
   {
     title: "Historical GPS + fuel level (paginated)",
-    raw: `// 1) multiCall LogRecord + StatusData(fuel)
-const [page1, fuel] = await api.multiCall([
-  ['Get', { typeName: 'LogRecord',
-            search: { deviceSearch: { id: 'b1' }, fromDate, toDate },
-            resultsLimit: 50000 }],
-  ['Get', { typeName: 'StatusData',
-            search: { deviceSearch: { id: 'b1' },
-                      diagnosticSearch: { id: 'DiagnosticFuelLevelId' },
-                      fromDate, toDate } }],
-]);
+    raw: `const GeotabApi = require('mg-api-js');
+const api = new GeotabApi({ /* credentials */ }, { rememberMe: true });
 
-// 2) If LogRecord came back full, page until exhausted...
-let all = [...page1];
-while (all.length % 50000 === 0 && all.length > 0) {
-  const more = await api.call('Get', { typeName: 'LogRecord',
-    search: { deviceSearch: { id: 'b1' },
-              fromDate: all[all.length - 1].dateTime, toDate } });
-  if (!more.length) break;
-  all.push(...more.slice(1));
-  if (more.length < 50000) break;
-}
-// 3) Compute bearing yourself, atan2 from consecutive points...`,
-    sdk: `const data = await sdk.history({
-  deviceId: 'b1', from, to,
-  include: { gps: true, diagnostics: [Diagnostics.FUEL_LEVEL] },
-  computeBearing: true,
-});
+(async () => {
+  await api.authenticate();
+  const fromDate = new Date('2024-01-15T00:00:00Z');
+  const toDate   = new Date('2024-01-15T23:59:59Z');
 
-data.gps;                            // paginated, with .bearing
-data.diagnostics[Diagnostics.FUEL_LEVEL]; // StatusData[]`,
+  // 1) multiCall LogRecord + StatusData(fuel)
+  const [page1, fuel] = await api.multiCall([
+    ['Get', { typeName: 'LogRecord',
+              search: { deviceSearch: { id: 'b1' }, fromDate, toDate },
+              resultsLimit: 50000 }],
+    ['Get', { typeName: 'StatusData',
+              search: { deviceSearch: { id: 'b1' },
+                        diagnosticSearch: { id: 'DiagnosticFuelLevelId' },
+                        fromDate, toDate } }],
+  ]);
+
+  // 2) If LogRecord came back full, page until exhausted...
+  let all = [...page1];
+  while (all.length % 50000 === 0 && all.length > 0) {
+    const more = await api.call('Get', { typeName: 'LogRecord',
+      search: { deviceSearch: { id: 'b1' },
+                fromDate: all[all.length - 1].dateTime, toDate } });
+    if (!more.length) break;
+    all.push(...more.slice(1));
+    if (more.length < 50000) break;
+  }
+  // 3) Compute bearing yourself, atan2 from consecutive points...
+})();`,
+    sdk: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
+const sdk = new GeotabSDK({ /* credentials */ });
+
+(async () => {
+  await sdk.connect();
+  const data = await sdk.history({
+    deviceId: 'b1',
+    from: new Date('2024-01-15T00:00:00Z'),
+    to:   new Date('2024-01-15T23:59:59Z'),
+    include: { gps: true, diagnostics: [Diagnostics.FUEL_LEVEL] },
+    computeBearing: true,
+  });
+
+  data.gps;                                  // paginated, with .bearing
+  data.diagnostics[Diagnostics.FUEL_LEVEL];  // StatusData[]
+})();`,
     win: "One call. Auto-pagination. Bearing computed for you.",
   },
   {
     title: "Resolve device names across many lookups",
-    raw: `// Load devices once...
-const devices = await api.call('Get', { typeName: 'Device' });
-const byId = new Map(devices.map(d => [d.id, d]));
+    raw: `const GeotabApi = require('mg-api-js');
+const api = new GeotabApi({ /* credentials */ }, { rememberMe: true });
 
-// ... and remember to refresh after a while
-let loadedAt = Date.now();
-function name(id) {
-  if (Date.now() - loadedAt > 3600_000) { /* refresh somehow */ }
-  return byId.get(id)?.name;
-}`,
-    sdk: `await sdk.connect({ cacheDevices: true });
+(async () => {
+  await api.authenticate();
+  // Load devices once...
+  const devices = await api.call('Get', { typeName: 'Device' });
+  const byId = new Map(devices.map(d => [d.id, d]));
 
-// EntityCache (default 1h TTL) is used internally by liveTracker,
-// history, fleetSnapshot. Hydrated device names show up automatically.`,
+  // ... and remember to refresh after a while
+  let loadedAt = Date.now();
+  function name(id) {
+    if (Date.now() - loadedAt > 3600_000) { /* refresh somehow */ }
+    return byId.get(id)?.name;
+  }
+})();`,
+    sdk: `const { GeotabSDK } = require('geotab-smart-sdk');
+const sdk = new GeotabSDK({ /* credentials */ });
+
+(async () => {
+  await sdk.connect({ cacheDevices: true });
+
+  // EntityCache (default 1h TTL) is used internally by liveTracker,
+  // history, fleetSnapshot. Hydrated device names show up automatically.
+})();`,
     win: "TTL cache built in. Used internally by helpers — names just appear.",
   },
 ];
@@ -526,62 +658,98 @@ const HELPER_MATRIX = [
 const CHEAT_SECTIONS = [
   {
     title: "Construction & lifecycle",
-    code: `const sdk = new GeotabSDK({
-  username, password, database,
-  sessionId?,        // optional — resume an existing session (skip password)
-  server?,           // optional, default 'my.geotab.com'
+    code: `const { GeotabSDK } = require('geotab-smart-sdk');
+
+const sdk = new GeotabSDK({
+  username:  'user@company.com',
+  password:  'secret',
+  database:  'my_company',
+  // sessionId: '...',         // optional — resume an existing session (skip password)
+  // server:    'my.geotab.com', // optional, default 'my.geotab.com'
 }, {
-  cacheTtlMs?,       // optional, default 1h
-  readOnly?,         // optional, default false — rejects non-Get* methods
+  cacheTtlMs: 60 * 60 * 1000,  // optional, default 1h
+  readOnly:   false,           // optional, default false — rejects non-Get* methods
 });
 
-await sdk.connect({ cacheDevices?, cacheGroups?: [ids], cacheDiagnostics? });`,
+(async () => {
+  await sdk.connect({
+    cacheDevices:     true,
+    // cacheGroups:      ['groupCompanyId'],
+    // cacheDiagnostics: true,
+  });
+})();`,
   },
   {
     title: "Session persistence (skip the password)",
-    code: `// MyGeotab sessions are valid up to 14 days.
-const session = sdk.getSession();
-// → { sessionId, userName, database, server } | null
-// Persist it (file / db / localStorage), then on next run:
+    code: `// ⚠️  These two halves run in SEPARATE process invocations,
+//     not back-to-back. Single-process apps don't need this at all —
+//     the SDK keeps the session alive in memory automatically.
 
-const sdk2 = new GeotabSDK({
-  username:  session.userName,
-  database:  session.database,
-  sessionId: session.sessionId,   // no password needed
-  server:    session.server,
-});
+// ─── Run #1: authenticate, save the session ──────────────────────
+const { GeotabSDK } = require('geotab-smart-sdk');
 
-// Or listen for it every time the session refreshes:
-sdk.on?.('authenticated', s => persist(s));`,
+const sdk = new GeotabSDK({ username, password, database });
+
+(async () => {
+  await sdk.connect();
+  const session = sdk.getSession();
+  // → { sessionId, userName, database, server } | null
+  await saveSomewhere(session);   // ~/.config | localStorage | secrets manager
+})();
+
+// Or save on every refresh:
+sdk.on('authenticated', s => saveSomewhere(s));
+
+// ─── Run #2 (any time within 14 days): resume without a password ─
+(async () => {
+  const session = await loadSomewhere();
+  const sdk = new GeotabSDK({
+    username:  session.userName,
+    database:  session.database,
+    sessionId: session.sessionId,   // password not required
+    server:    session.server,
+  });
+  await sdk.connect();              // no password roundtrip
+})();`,
   },
   {
     title: "Read-only mode",
-    code: `const safe = new GeotabSDK(
+    code: `const { GeotabSDK } = require('geotab-smart-sdk');
+const safe = new GeotabSDK(
   { username, password, database },
   { readOnly: true }
 );
 
-await safe.call('Get', { typeName: 'Device' });   // ✓
-await safe.call('Set', { typeName: 'Group' });    // ✗ ReadOnlyViolation
-// All built-in helpers (liveTracker, history, fleetSnapshot, feeds)
-// are Get-only and work transparently in this mode.`,
+(async () => {
+  await safe.connect();
+  await safe.call('Get', { typeName: 'Device' });   // ✓
+  await safe.call('Set', { typeName: 'Group' });    // ✗ ReadOnlyViolation
+  // All built-in helpers (liveTracker, history, fleetSnapshot, feeds)
+  // are Get-only and work transparently in this mode.
+})();`,
   },
   {
     title: "Raw access (escape hatch)",
-    code: `await sdk.call(method, params);
-await sdk.multiCall([['method', params], ...]);
-// Auto re-auth + rate-limit retry under the hood.
-// Rejected in readOnly mode unless method starts with "Get".`,
+    code: `(async () => {
+  await sdk.connect();
+  await sdk.call(method, params);
+  await sdk.multiCall([['method', params], ...]);
+  // Auto re-auth + rate-limit retry under the hood.
+  // Rejected in readOnly mode unless method starts with "Get".
+})();`,
   },
   {
     title: "Live tracker (DeviceStatusInfo)",
-    code: `const tracker = sdk.liveTracker()
-  .withDiagnostics([ids])  .withFaults()
-  .forDevices([ids])       .pollEvery(ms)
-  .on('update', vehicles => { /* ... */ })
-  .on('error',  err      => { /* ... */ });
-await tracker.start();
-tracker.stop();
+    code: `(async () => {
+  await sdk.connect({ cacheDevices: true });
+  const tracker = sdk.liveTracker()
+    .withDiagnostics([ids])  .withFaults()
+    .forDevices([ids])       .pollEvery(ms)
+    .on('update', vehicles => { /* ... */ })
+    .on('error',  err      => { /* ... */ });
+  await tracker.start();
+  // tracker.stop();
+})();
 
 // vehicles[i]:
 //   { device:{id,name,serialNumber},
@@ -592,18 +760,21 @@ tracker.stop();
   },
   {
     title: "Realtime tracker (LogRecord)",
-    code: `const tracker = sdk.realtimeTracker()
-  .withDiagnostics([ids])
-  .withIgnition()             // recommended
-  .withDriverAttribution()    // recommended
-  .withFaults()
-  .forDevices([ids])
-  .pollEvery(5_000)           // default; floor 1000ms; warn < 2000ms
-  .drivingSpeedThreshold(5)   // km/h
-  .on('update', vehicles => { /* ... */ })
-  .on('error',  err      => { /* ... */ });
-await tracker.start();
-tracker.stop();
+    code: `(async () => {
+  await sdk.connect({ cacheDevices: true });
+  const tracker = sdk.realtimeTracker()
+    .withDiagnostics([ids])
+    .withIgnition()             // recommended
+    .withDriverAttribution()    // recommended
+    .withFaults()
+    .forDevices([ids])
+    .pollEvery(5_000)           // default; floor 1000ms; warn < 2000ms
+    .drivingSpeedThreshold(5)   // km/h
+    .on('update', vehicles => { /* ... */ })
+    .on('error',  err      => { /* ... */ });
+  await tracker.start();
+  // tracker.stop();
+})();
 
 // vehicles[i]: LiveTracker shape +
 //   { ignition:{value,dateTime}|null, source:'logrecord' }
@@ -611,47 +782,59 @@ tracker.stop();
   },
   {
     title: "Historical query",
-    code: `const data = await sdk.history({
-  deviceId, from, to,
-  include: { gps?, trips?, faults?, diagnostics?: [ids] },
-  computeBearing?
-});
-// → { deviceId, period, gps, trips, faults, diagnostics:{ [id]: StatusData[] } }
+    code: `(async () => {
+  await sdk.connect();
+  const data = await sdk.history({
+    deviceId, from, to,
+    include: { gps: true, trips: true, faults: true, diagnostics: [ids] },
+    computeBearing: true,
+  });
+  // → { deviceId, period, gps, trips, faults, diagnostics:{ [id]: StatusData[] } }
 
-const results = await sdk.historyMany([ids], options);
-const groupResults = await sdk.historyByGroups([groupIds], options);`,
+  const results = await sdk.historyMany([ids], options);
+  const groupResults = await sdk.historyByGroups([groupIds], options);
+})();`,
   },
   {
     title: "Fleet snapshot",
-    code: `const fleet = await sdk.fleetSnapshot({
-  include: { devices?, liveStatus?, activeFaults?,
-             diagnostics?: [ids], recentTrips?: N },
-  groupIds?
-});
-// → { devices, liveStatus: Map, faults: Map,
-//     diagnostics: { [id]: Map }, recentTrips: Map,
-//     summary: { total, driving, stopped,
-//                disconnected, withActiveFaults } }`,
+    code: `(async () => {
+  await sdk.connect({ cacheDevices: true });
+  const fleet = await sdk.fleetSnapshot({
+    include: { devices: true, liveStatus: true, activeFaults: true,
+               diagnostics: [ids], recentTrips: 3 },
+    groupIds: ['groupCompanyId'],
+  });
+  // → { devices, liveStatus: Map, faults: Map,
+  //     diagnostics: { [id]: Map }, recentTrips: Map,
+  //     summary: { total, driving, stopped,
+  //                disconnected, withActiveFaults } }
+})();`,
   },
   {
     title: "Feeds (GetFeed streaming)",
-    code: `const feeds = sdk.feeds()
-  .addFeed(type, { fromVersion?, fromDate?, resultsLimit?, search? })
-  .on('version', (type, token)   => /* persist BEFORE 'data' */)
-  .on('data',    (type, records) => /* process */)
-  .on('error',   (type, err)     => /* log; loop continues */);
-feeds.start();  feeds.stop();
-feeds.setVersion(type, token);  feeds.getVersion(type);`,
+    code: `(async () => {
+  await sdk.connect();
+  const feeds = sdk.feeds()
+    .addFeed(type, { fromVersion, fromDate, resultsLimit, search })
+    .on('version', (type, token)   => { /* persist BEFORE 'data' */ })
+    .on('data',    (type, records) => { /* process */ })
+    .on('error',   (type, err)     => { /* log; loop continues */ });
+  feeds.start();
+  // feeds.stop();
+  // feeds.setVersion(type, token); feeds.getVersion(type);
+})();`,
   },
   {
     title: "Errors",
-    code: `try {
-  await sdk.call('Get', { typeName: 'Device' });
-} catch (err) {
-  err.code;     // 'InvalidUserException' | 'OverLimitException' | ...
-  err.context;  // 'Get' | 'multiCall' | ...
-  err.raw;      // original mg-api-js error
-}`,
+    code: `(async () => {
+  try {
+    await sdk.call('Get', { typeName: 'Device' });
+  } catch (err) {
+    err.code;     // 'InvalidUserException' | 'OverLimitException' | ...
+    err.context;  // 'Get' | 'multiCall' | ...
+    err.raw;      // original mg-api-js error
+  }
+})();`,
   },
 ];
 
@@ -808,7 +991,6 @@ export default function GeotabSmartSdkInspector() {
     { id: "vsraw",     label: "vs raw API",   icon: "ti-arrows-right-left" },
     { id: "diags",     label: "Diagnostics",  icon: "ti-gauge" },
     { id: "cheat",     label: "Cheat sheet",  icon: "ti-list-details" },
-    { id: "ask",       label: "Ask Claude",   icon: "ti-message-circle" },
   ];
 
   const tabStyle = (id) => ({
@@ -832,7 +1014,7 @@ export default function GeotabSmartSdkInspector() {
         </div>
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, color: "var(--color-text-primary)" }}>geotab-smart-sdk Inspector</div>
-          <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Use-case driven reference · v1.0.0</div>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Use-case driven reference · v{pkg.version}</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 12 }}>
           <a
@@ -865,9 +1047,9 @@ export default function GeotabSmartSdkInspector() {
 
       {/* ── Use cases ─────────────────────────────────────────────────────── */}
       {tab === "usecases" && (
-        <div style={{ display: "grid", gridTemplateColumns: "210px 1fr", gap: 16, minHeight: 500 }}>
+        <div className="inspector-usecases-grid" style={{ display: "grid", gridTemplateColumns: "210px 1fr", gap: 16, minHeight: 500 }}>
           {/* Sidebar */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="inspector-case-sidebar" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {CASES.map(c => (
               <button
                 key={c.id}
@@ -879,6 +1061,7 @@ export default function GeotabSmartSdkInspector() {
                   color: caseId === c.id ? c.accentColor : "var(--color-text-secondary)",
                   border: `0.5px solid ${caseId === c.id ? c.accentBorder : "transparent"}`,
                   fontSize: 13, fontWeight: caseId === c.id ? 500 : 400, transition: "all 0.15s",
+                  whiteSpace: "nowrap",
                 }}
               >
                 <i className={`ti ${c.icon}`} style={{ fontSize: 15, flexShrink: 0 }} aria-hidden="true" />
@@ -905,7 +1088,7 @@ export default function GeotabSmartSdkInspector() {
                 <div style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>What you configure</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {activeCase.fields.map((f, i) => (
-                    <div key={i} style={{
+                    <div key={i} className="inspector-field-row" style={{
                       display: "flex", alignItems: "flex-start", gap: 10,
                       padding: "7px 10px", borderRadius: 6,
                       background: f.highlight ? activeCase.accentBg : "var(--color-background-secondary)",
@@ -1035,12 +1218,12 @@ export default function GeotabSmartSdkInspector() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 14 }}>
                   <div>
-                    <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Raw mg-api-js</div>
-                    <CodeBlock code={c.raw} id={`cmp-raw-${cmpIdx}`} copiedId={copiedId} onCopy={copyCode} />
-                  </div>
-                  <div>
                     <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--accent-green-fg)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>geotab-smart-sdk</div>
                     <CodeBlock code={c.sdk} id={`cmp-sdk-${cmpIdx}`} copiedId={copiedId} onCopy={copyCode} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Raw mg-api-js</div>
+                    <CodeBlock code={c.raw} id={`cmp-raw-${cmpIdx}`} copiedId={copiedId} onCopy={copyCode} />
                   </div>
                 </div>
               </div>

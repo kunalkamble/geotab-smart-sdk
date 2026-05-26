@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/geotab-smart-sdk?color=cb3837&logo=npm)](https://www.npmjs.com/package/geotab-smart-sdk)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-43853d?logo=node.js&logoColor=white)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-87%20passing-43853d)](https://kunalkamble.github.io/geotab-smart-sdk/#/guide)
+[![Tests](https://img.shields.io/badge/tests-89%20passing-43853d)](https://kunalkamble.github.io/geotab-smart-sdk/#/guide)
 [![Coverage](https://img.shields.io/badge/coverage-84%25-97ca00)](https://kunalkamble.github.io/geotab-smart-sdk/#/guide)
 [![Docs](https://img.shields.io/badge/docs-live-0F6E56)](https://kunalkamble.github.io/geotab-smart-sdk/)
 [![CI](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml)
@@ -37,21 +37,25 @@ const sdk = new GeotabSDK({
   database: 'my_company',
 });
 
-await sdk.connect({ cacheDevices: true });
+async function main() {
+  await sdk.connect({ cacheDevices: true });
 
-// Live tracking with bearing + fuel level — one multiCall per 5s poll
-const tracker = sdk.liveTracker()
-  .withDiagnostics([Diagnostics.FUEL_LEVEL])
-  .withFaults()
-  .pollEvery(5_000);
+  // Live tracking with bearing + fuel level — one multiCall per 5s poll
+  const tracker = sdk.liveTracker()
+    .withDiagnostics([Diagnostics.FUEL_LEVEL])
+    .withFaults()
+    .pollEvery(5_000);
 
-tracker.on('update', (vehicles) => {
-  for (const v of vehicles) {
-    console.log(v.device.name, v.location.bearing, v.diagnostics);
-  }
-});
+  tracker.on('update', (vehicles) => {
+    for (const v of vehicles) {
+      console.log(v.device.name, v.location.bearing, v.diagnostics);
+    }
+  });
 
-await tracker.start();
+  await tracker.start();
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
 ```
 
 ---
@@ -115,10 +119,10 @@ node examples/continuous-feed-sync.js
 ```bash
 npm test               # spec reporter
 npm run test:watch     # dev loop
-npm run test:coverage  # 84% lines, 81% branches, 76% functions
+npm run test:coverage  # 84% lines, 80% branches, 75% functions
 ```
 
-87 tests across 8 files using Node 20's built-in test runner — zero test-framework dependencies. CI gates the docs deploy on tests + lint.
+89 tests across 8 files using Node 20's built-in test runner — zero test-framework dependencies. CI gates the docs deploy on tests + lint.
 
 ---
 

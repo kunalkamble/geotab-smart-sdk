@@ -6,6 +6,7 @@ import Playground from './pages/Playground.jsx';
 import Sponsor from './pages/Sponsor.jsx';
 import GeotabSmartSdkInspector from './geotab-smart-sdk-inspector.jsx';
 import GeotabApiInspector from './geotab-api-inspector.jsx';
+import pkg from '../package.json';
 
 const ROUTES = [
   {
@@ -171,7 +172,7 @@ export default function App() {
           </ul>
           <div className="app-sidebar-foot">
             <div className="app-sidebar-foot-title">geotab-smart-sdk</div>
-            <div className="app-sidebar-foot-sub">v0.1.0 · MIT</div>
+            <div className="app-sidebar-foot-sub">v{pkg.version} · MIT</div>
           </div>
         </nav>
 

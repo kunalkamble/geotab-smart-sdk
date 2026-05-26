@@ -38,7 +38,7 @@
   },
   "homepage": "https://kunalkamble.github.io/geotab-smart-sdk/",
   "dependencies": {
-    "mg-api-js": "^2.0.1"
+    "mg-api-js": "^3.0.2"
   },
   "engines": {
     "node": ">= 20.0.0"

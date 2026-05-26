@@ -672,31 +672,45 @@ button.app-topbar-link {
 
 .page-guide { /* full width — prose sections cap themselves below */ }
 
-.guide-toc {
+/* Tabbed section nav — replaces the flat anchor TOC. Same look as the
+ * tab bar inside the inspectors so the site feels consistent. */
+.guide-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 12px 14px;
+  gap: 4px;
   margin: 0 0 28px 0;
+  padding: 4px;
   background: var(--color-background-secondary);
-  border: 1px solid var(--color-border-tertiary);
-  border-radius: 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
-.guide-toc a {
-  font-size: 12.5px;
-  font-family: var(--font-mono);
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  padding: 4px 10px;
+.guide-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
   border-radius: 6px;
-  border: 1px solid transparent;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  border: 0.5px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13.5px;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.guide-toc a:hover {
+.guide-tab:hover {
+  color: var(--color-text-primary);
+}
+.guide-tab.active {
   background: var(--color-background-primary);
   color: var(--color-text-primary);
-  border-color: var(--color-border-tertiary);
+  border-color: var(--color-border-secondary);
+  font-weight: 500;
 }
+.guide-tab .ti { font-size: 14px; }
 
 .guide-section {
   margin-bottom: 36px;
@@ -709,6 +723,14 @@ button.app-topbar-link {
   font-weight: 500;
   letter-spacing: -0.01em;
   margin: 0 0 12px 0;
+  color: var(--color-text-primary);
+  max-width: 880px;
+}
+.guide-section h3 {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  margin: 24px 0 10px 0;
   color: var(--color-text-primary);
   max-width: 880px;
 }
@@ -740,18 +762,43 @@ button.app-topbar-link {
 }
 .guide-section li { margin-bottom: 6px; }
 
+.guide-code-wrap {
+  position: relative;
+  margin: 0 0 14px 0;
+}
 .guide-code {
   background: #0f1117;
   color: #e2e8f0;
   border-radius: 8px;
   padding: 14px;
+  padding-right: 90px; /* room for the copy button */
   font-size: 12.5px;
   line-height: 1.65;
   overflow-x: auto;
   font-family: var(--font-mono);
-  margin: 0 0 14px 0;
+  margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+.guide-code-copy {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.guide-code-copy:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.guide-code-copy.copied { background: #0F6E56; color: #fff; border-color: #0F6E56; }
+.guide-code-copy .ti { font-size: 14px; }
 
 .guide-table {
   width: 100%;
@@ -1256,5 +1303,40 @@ button.app-topbar-link {
 @media (prefers-color-scheme: dark) {
   .leaflet-tile {
     filter: brightness(0.85) saturate(0.9) hue-rotate(180deg) invert(0.9);
+  }
+}
+
+/* ── Inspector mobile responsiveness ───────────────────────────────────
+ * The Smart SDK and Raw API inspectors use heavy inline styles with
+ * hardcoded grid columns (210px / 200px sidebar + 1fr detail). On
+ * narrow viewports the sidebar squeezes the detail content until code
+ * blocks and field labels overflow horizontally. These overrides flip
+ * the layout to single-column and turn the case sidebar into a
+ * horizontal scroll strip — the !important is required because the
+ * inline grid-template-columns wins specificity otherwise.
+ * ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .inspector-usecases-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    min-height: 0 !important;
+  }
+  .inspector-case-sidebar {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 4px;
+    margin: 0 -4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .inspector-case-sidebar > button {
+    flex-shrink: 0 !important;
+  }
+  .inspector-field-row {
+    flex-direction: column !important;
+    gap: 4px !important;
+  }
+  .inspector-field-row > code {
+    min-width: 0 !important;
   }
 }

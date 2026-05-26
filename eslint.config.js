@@ -1,6 +1,6 @@
 'use strict';
 
-// ESLint 9 flat config. The SDK is CommonJS Node ≥18, so `.js` here is
+// ESLint 9 flat config. The SDK is CommonJS Node ≥20, so `.js` here is
 // interpreted as CommonJS (no `"type": "module"` in package.json).
 
 const js = require('@eslint/js');
