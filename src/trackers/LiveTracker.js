@@ -61,6 +61,7 @@ class LiveTracker extends EventEmitter {
     this._diagnosticIds  = [];   // IDs to fetch via StatusData
     this._includeFaults  = false;
     this._deviceIds      = [];   // empty = all devices
+    this._groupIds       = [];   // empty = all groups (no server-side filter)
     this._pollMs         = DEFAULT_POLL_MS;
     this._timer          = null;
     this._running        = false;
@@ -97,6 +98,23 @@ class LiveTracker extends EventEmitter {
    */
   forDevices(deviceIds) {
     this._deviceIds = Array.isArray(deviceIds) ? deviceIds : [deviceIds];
+    return this;
+  }
+
+  /**
+   * Restrict tracking to devices in one or more groups.
+   * Applied server-side via DeviceSearch.groups — narrows the payload
+   * before client-side device-id filtering (if any).
+   *
+   * Use Geotab group IDs (e.g. 'groupCompanyId' or a custom group's id).
+   * If both .forGroups() and .forDevices() are set, the result is the
+   * intersection (devices that are in one of the groups AND in the id list).
+   *
+   * @param {string[]} groupIds
+   * @returns {this}
+   */
+  forGroups(groupIds) {
+    this._groupIds = Array.isArray(groupIds) ? groupIds : [groupIds];
     return this;
   }
 
@@ -163,26 +181,32 @@ class LiveTracker extends EventEmitter {
   _buildCalls() {
     const calls = [];
 
+    // Group filter — two shapes, same as FleetSnapshot:
+    //   - DeviceStatusInfo:           search.groups
+    //   - StatusData / FaultData:     search.deviceSearch.groups
+    // Individual device-id filtering still happens client-side after fetch
+    // (DeviceSearch by id is slower than by groups on Geotab's side).
+    const hasGroups   = this._groupIds.length > 0;
+    const groupRefs   = hasGroups ? this._groupIds.map(id => ({ id })) : null;
+    const groupTop    = hasGroups ? { groups: groupRefs } : {};
+    const groupNested = hasGroups ? { deviceSearch: { groups: groupRefs } } : {};
+
     // [0] Always: DeviceStatusInfo — live location, bearing, driver, alerts
-    const dsiSearch = {};
-    if (this._deviceIds.length > 0) {
-      // NOTE: DeviceStatusInfo search by device group is supported,
-      // but individual device filtering is done client-side after fetch
-      // to avoid the performance penalty of scoped queries.
-    }
-    calls.push(['Get', { typeName: 'DeviceStatusInfo', search: dsiSearch }]);
+    calls.push(['Get', { typeName: 'DeviceStatusInfo', search: { ...groupTop } }]);
 
     // [1..N] One Get(StatusData) call per diagnostic type
     for (const diagId of this._diagnosticIds) {
-      const search = { diagnosticSearch: { id: diagId } };
-      calls.push(['Get', { typeName: 'StatusData', search }]);
+      calls.push(['Get', {
+        typeName: 'StatusData',
+        search: { ...groupNested, diagnosticSearch: { id: diagId } },
+      }]);
     }
 
     // [N+1] Optional: FaultData for active faults
     if (this._includeFaults) {
       calls.push(['Get', {
         typeName: 'FaultData',
-        search: { faultStates: ['Active'] },
+        search: { ...groupNested, faultStates: ['Active'] },
       }]);
     }
 

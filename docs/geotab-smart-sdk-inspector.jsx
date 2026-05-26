@@ -45,6 +45,7 @@ console.log(fleet.summary);`,
       { name: ".withDiagnostics([ids])", highlight: true, note: "Enrich each vehicle snapshot with StatusData (use Diagnostics.* constants)" },
       { name: ".withFaults()", highlight: false, note: "Include active fault codes per vehicle" },
       { name: ".forDevices([ids])", highlight: false, note: "Restrict tracking; omit for all devices" },
+      { name: ".forGroups([ids])", highlight: true, note: "Server-side group filter on DSI + StatusData + FaultData. Composes with .forDevices() (intersection)." },
       { name: ".pollEvery(ms)", highlight: false, note: "Poll interval — minimum 1000 ms" },
       { name: ".on('update', vehicles)", highlight: true, note: "Fires every poll with the merged snapshot" },
       { name: ".on('error', err)", highlight: false, note: "Non-fatal — the poll loop continues" },
@@ -54,7 +55,7 @@ console.log(fleet.summary);`,
       { type: "tip",  text: "Each poll is a single multiCall: DeviceStatusInfo + StatusData × N + FaultData. No extra round-trips." },
       { type: "info", text: "Bearing comes from DeviceStatusInfo (the only object that has it). The SDK picks the right object for you." },
       { type: "warn", text: "Builder methods return `this`. Don't forget the trailing .start() — the tracker doesn't poll until you call it." },
-      { type: "info", text: "Group filtering isn't a builder yet. Pre-resolve device IDs via sdk.call('Get', { typeName: 'Device', search: { groups: [{ id }] } }) and pass them via .forDevices()." },
+      { type: "tip",  text: "Pass .forGroups(['groupCompanyId']) to narrow the payload server-side. Geotab applies the filter to DSI, StatusData, and FaultData in one shot." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
 const sdk = new GeotabSDK({ /* ... */ });
@@ -66,7 +67,8 @@ const tracker = sdk.liveTracker()
     Diagnostics.AUX_INPUT_1,
   ])
   .withFaults()
-  .forDevices(['b1', 'b2'])   // optional
+  .forGroups(['groupCompanyId'])   // optional — server-side
+  .forDevices(['b1', 'b2'])        // optional — narrows further (intersection)
   .pollEvery(5000);
 
 tracker.on('update', vehicles => {
@@ -480,7 +482,7 @@ const HELPER_MATRIX = [
   { capability: "Trips",                    liveTracker: "—",                     realtimeTracker: "—",                     history: "include.trips",           fleetSnapshot: "recentTrips",   feeds: "Trip" },
   { capability: "Fleet summary counts",     liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "✓ .summary",    feeds: "—" },
   { capability: "Continuous sync",          liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "—",             feeds: "✓ adaptive" },
-  { capability: "Filter by group",          liveTracker: "via forDevices",        realtimeTracker: "via forDevices",        history: "via historyMany",         fleetSnapshot: "✓ groupIds",    feeds: "—" },
+  { capability: "Filter by group",          liveTracker: "✓ .forGroups()",        realtimeTracker: "via forDevices",        history: "via historyMany",         fleetSnapshot: "✓ groupIds",    feeds: "—" },
   { capability: "Device names hydrated",    liveTracker: "✓",                     realtimeTracker: "✓",                     history: "—",                       fleetSnapshot: "via cache",     feeds: "—" },
   { capability: "Connectivity state",       liveTracker: "✓ isConnected",         realtimeTracker: "✓ from recency",        history: "—",                       fleetSnapshot: "✓ summary",     feeds: "—" },
 ];

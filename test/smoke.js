@@ -79,10 +79,40 @@ check('LiveTracker builder chains and start() exists', () => {
     .withDiagnostics([sdk.Diagnostics.FUEL_LEVEL])
     .withFaults()
     .forDevices(['b1'])
+    .forGroups(['groupCompanyId'])
     .pollEvery(5000);
   assert.ok(t instanceof sdk.LiveTracker);
   assert.equal(typeof t.start, 'function');
   assert.equal(typeof t.stop, 'function');
+  assert.equal(typeof t.forGroups, 'function');
+});
+
+check('LiveTracker.forGroups propagates to DSI, StatusData, FaultData', () => {
+  const t = new sdk.LiveTracker({}, {}, { getAll: () => null });
+  t.withDiagnostics([sdk.Diagnostics.FUEL_LEVEL]).withFaults().forGroups(['groupCompanyId']);
+  const calls = t._buildCalls();
+
+  const dsi = calls.find(([, p]) => p.typeName === 'DeviceStatusInfo');
+  const sd  = calls.find(([, p]) => p.typeName === 'StatusData');
+  const fd  = calls.find(([, p]) => p.typeName === 'FaultData');
+
+  assert.deepEqual(dsi[1].search.groups,             [{ id: 'groupCompanyId' }]);
+  assert.deepEqual(sd[1].search.deviceSearch?.groups, [{ id: 'groupCompanyId' }]);
+  assert.deepEqual(fd[1].search.deviceSearch?.groups, [{ id: 'groupCompanyId' }]);
+
+  // Diagnostic + fault state filters must remain intact alongside the group filter
+  assert.deepEqual(sd[1].search.diagnosticSearch, { id: sdk.Diagnostics.FUEL_LEVEL });
+  assert.deepEqual(fd[1].search.faultStates, ['Active']);
+});
+
+check('LiveTracker without forGroups produces no group filter', () => {
+  const t = new sdk.LiveTracker({}, {}, { getAll: () => null });
+  t.withDiagnostics([sdk.Diagnostics.FUEL_LEVEL]).withFaults();
+  const calls = t._buildCalls();
+  for (const [, p] of calls) {
+    assert.equal(p.search.groups, undefined);
+    assert.equal(p.search.deviceSearch?.groups, undefined);
+  }
 });
 
 check('RealtimeTracker builder chains and exposes derived-field config', () => {
