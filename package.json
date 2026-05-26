@@ -1,6 +1,6 @@
 {
   "name": "geotab-smart-sdk",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A smart, composable Node.js SDK for the MyGeotab API — built on top of mg-api-js with adaptive feeds, named diagnostics, and use-case-driven helpers.",
   "main": "src/index.js",
   "files": [
