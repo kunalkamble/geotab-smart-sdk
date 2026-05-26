@@ -3,13 +3,37 @@
   "version": "1.0.0",
   "description": "A smart, composable Node.js SDK for the MyGeotab API — built on top of mg-api-js with adaptive feeds, named diagnostics, and use-case-driven helpers.",
   "main": "src/index.js",
+  "files": [
+    "src",
+    "examples"
+  ],
   "scripts": {
-    "test": "node examples/live-tracking.js",
+    "test": "node test/smoke.js",
     "lint": "eslint src/"
   },
-  "keywords": ["geotab", "mygeotab", "telematics", "fleet", "gps", "sdk"],
+  "keywords": [
+    "geotab",
+    "mygeotab",
+    "mg-api-js",
+    "telematics",
+    "fleet",
+    "fleet-management",
+    "gps",
+    "vehicle-tracking",
+    "diagnostics",
+    "getfeed",
+    "sdk"
+  ],
   "author": "Kunal Kamble",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kunalkamble/geotab-smart-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kunalkamble/geotab-smart-sdk/issues"
+  },
+  "homepage": "https://github.com/kunalkamble/geotab-smart-sdk#readme",
   "dependencies": {
     "mg-api-js": "^2.0.1"
   },
