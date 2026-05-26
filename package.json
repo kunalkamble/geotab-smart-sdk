@@ -34,7 +34,7 @@
   "bugs": {
     "url": "https://github.com/kunalkamble/geotab-smart-sdk/issues"
   },
-  "homepage": "https://github.com/kunalkamble/geotab-smart-sdk#readme",
+  "homepage": "https://kunalkamble.github.io/geotab-smart-sdk/",
   "dependencies": {
     "mg-api-js": "^2.0.1"
   },

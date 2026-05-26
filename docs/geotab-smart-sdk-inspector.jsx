@@ -7,38 +7,60 @@ const CASES = [
     primaryObject: "GeotabSDK", method: "new + connect()",
     accentColor: "var(--accent-green-fg)", accentBg: "var(--accent-green-bg)", accentBorder: "var(--accent-green-border)",
     fields: [
-      { name: "username / password / database", highlight: false, note: "MyGeotab credentials — required" },
+      { name: "username / database", highlight: false, note: "Required" },
+      { name: "password", highlight: false, note: "Required unless sessionId is provided" },
+      { name: "sessionId", highlight: true, note: "Resume an existing MyGeotab session (valid up to 14 days). Skip the password on subsequent runs." },
       { name: "server", highlight: false, note: "Optional. Defaults to my.geotab.com" },
       { name: "options.cacheTtlMs", highlight: false, note: "EntityCache TTL. Defaults to 1 hour" },
-      { name: "connect({ cacheDevices })", highlight: true, note: "Warms the device cache up front — instant name lookups" },
+      { name: "options.readOnly", highlight: true, note: "If true, the SDK rejects any non-Get* method. Useful for sandboxed UIs." },
+      { name: "connect({ cacheDevices })", highlight: false, note: "Warms the device cache up front — instant name lookups" },
       { name: "connect({ cacheGroups: [ids] })", highlight: true, note: "Scopes the device cache to one or more groups. Implies cacheDevices." },
       { name: "connect({ cacheDiagnostics })", highlight: false, note: "Pre-load Diagnostic definitions" },
+      { name: "sdk.getSession()", highlight: true, note: "{ sessionId, userName, database, server } after auth — persist this to skip the password next run." },
     ],
     gotchas: [
       { type: "tip",  text: "Call connect() at startup to fail fast on bad credentials rather than waiting for the first real call to fail." },
       { type: "info", text: "connect() is idempotent — multiple concurrent callers share a single auth round-trip." },
       { type: "tip",  text: "Session expiry is handled transparently. You don't need a re-auth loop." },
+      { type: "tip",  text: "Capture sdk.getSession() after connect() and persist the sessionId (not the password) to resume across restarts for up to 14 days." },
+      { type: "info", text: "Listen for the 'authenticated' event if you want to persist on every refresh: sdk.on?.('authenticated', s => save(s))." },
+      { type: "warn", text: "readOnly: true blocks Set / Add / Remove / Execute* at sdk.call()/multiCall(). The error has code 'ReadOnlyViolation'. All built-in helpers are Get-only and still work." },
     ],
     code: `const { GeotabSDK } = require('geotab-smart-sdk');
 
+// ── First run: authenticate with a password ─────────────────────────
 const sdk = new GeotabSDK({
   username: process.env.GEOTAB_USER,
   password: process.env.GEOTAB_PASS,
   database: process.env.GEOTAB_DB,
-  server:   process.env.GEOTAB_SERVER, // optional
+  server:   process.env.GEOTAB_SERVER,         // optional
 }, {
-  cacheTtlMs: 60 * 60 * 1000, // optional
+  cacheTtlMs: 60 * 60 * 1000,                  // optional
+  readOnly:   false,                           // default; set true for sandboxes
 });
 
-// Optional: warm caches up front
 await sdk.connect({ cacheDevices: true });
+// or scope: await sdk.connect({ cacheGroups: ['groupCompanyId'] });
 
-// Or scope to a subset (useful for large fleets where you operate on one division)
-await sdk.connect({ cacheGroups: ['groupCompanyId'] });
+// Capture the session for next time — sessionId is valid up to 14 days.
+const session = sdk.getSession();
+// → { sessionId, userName, database, server }
+fs.writeFileSync('session.json', JSON.stringify(session));
 
-// All helpers are now ready
-const fleet = await sdk.fleetSnapshot({ include: { liveStatus: true } });
-console.log(fleet.summary);`,
+// ── Next run (or restart): resume without the password ─────────────
+const saved = JSON.parse(fs.readFileSync('session.json', 'utf8'));
+const sdk2 = new GeotabSDK({
+  username:  saved.userName,
+  database:  saved.database,
+  sessionId: saved.sessionId,                  // password not needed
+  server:    saved.server,
+});
+await sdk2.connect();
+
+// ── Read-only sandbox SDK (e.g. for a public demo / UI) ────────────
+const safe = new GeotabSDK({ username, password, database }, { readOnly: true });
+await safe.call('Get', { typeName: 'Device' });   // ✓ allowed
+await safe.call('Set', { typeName: 'Group' });    // ✗ ReadOnlyViolation`,
   },
   {
     id: "live", label: "Live tracking (DSI)", icon: "ti-map-pin",
@@ -506,18 +528,50 @@ const CHEAT_SECTIONS = [
     title: "Construction & lifecycle",
     code: `const sdk = new GeotabSDK({
   username, password, database,
-  server,           // optional, default 'my.geotab.com'
+  sessionId?,        // optional — resume an existing session (skip password)
+  server?,           // optional, default 'my.geotab.com'
 }, {
-  cacheTtlMs,       // optional, default 1h
+  cacheTtlMs?,       // optional, default 1h
+  readOnly?,         // optional, default false — rejects non-Get* methods
 });
 
 await sdk.connect({ cacheDevices?, cacheGroups?: [ids], cacheDiagnostics? });`,
   },
   {
+    title: "Session persistence (skip the password)",
+    code: `// MyGeotab sessions are valid up to 14 days.
+const session = sdk.getSession();
+// → { sessionId, userName, database, server } | null
+// Persist it (file / db / localStorage), then on next run:
+
+const sdk2 = new GeotabSDK({
+  username:  session.userName,
+  database:  session.database,
+  sessionId: session.sessionId,   // no password needed
+  server:    session.server,
+});
+
+// Or listen for it every time the session refreshes:
+sdk.on?.('authenticated', s => persist(s));`,
+  },
+  {
+    title: "Read-only mode",
+    code: `const safe = new GeotabSDK(
+  { username, password, database },
+  { readOnly: true }
+);
+
+await safe.call('Get', { typeName: 'Device' });   // ✓
+await safe.call('Set', { typeName: 'Group' });    // ✗ ReadOnlyViolation
+// All built-in helpers (liveTracker, history, fleetSnapshot, feeds)
+// are Get-only and work transparently in this mode.`,
+  },
+  {
     title: "Raw access (escape hatch)",
     code: `await sdk.call(method, params);
 await sdk.multiCall([['method', params], ...]);
-// Auto re-auth + rate-limit retry under the hood.`,
+// Auto re-auth + rate-limit retry under the hood.
+// Rejected in readOnly mode unless method starts with "Get".`,
   },
   {
     title: "Live tracker (DeviceStatusInfo)",
@@ -604,9 +658,13 @@ feeds.setVersion(type, token);  feeds.getVersion(type);`,
 const SYSTEM_PROMPT = `You are an expert on the geotab-smart-sdk Node.js package. The SDK wraps mg-api-js with use-case-driven helpers.
 
 Surface:
-- new GeotabSDK({ username, password, database, server? }, { cacheTtlMs? })
+- new GeotabSDK({ username, database, password?, sessionId?, server? }, { cacheTtlMs?, readOnly? })
+  - Either password or sessionId is required. sessionId resumes an existing MyGeotab session (valid up to 14 days). When both are supplied, mg-api-js tries the session first and falls back to the password.
+  - options.readOnly: when true, sdk.call / sdk.multiCall reject any method that isn't Get* (Set/Add/Remove/Execute*/... → throws ReadOnlyViolation). All built-in helpers are Get-only so they work transparently in readOnly mode.
 - sdk.connect({ cacheDevices?, cacheGroups?: [ids], cacheDiagnostics? }) — idempotent; safe to call multiple times. cacheGroups scopes the device cache to specific groups and implies cacheDevices.
-- sdk.call(method, params), sdk.multiCall([[method, params], ...]) — auto re-auth + rate-limit retry
+- sdk.getSession() — { sessionId, userName, database, server } | null after auth. Persist this to skip the password on the next run.
+- sdk.on?.('authenticated', session => ...) — fires after each successful auth with the fresh session payload.
+- sdk.call(method, params), sdk.multiCall([[method, params], ...]) — auto re-auth + rate-limit retry. Rejected in readOnly mode unless the method name starts with "Get".
 - sdk.liveTracker() — DeviceStatusInfo-based. Fluent: .withDiagnostics([ids]), .withFaults(), .forDevices([ids]), .pollEvery(ms), .start(), .stop(). Events: 'update' (vehicles), 'error' (err). Each poll is a single multiCall. Use for dashboards / one-snapshot-per-vehicle.
 - sdk.realtimeTracker() — LogRecord (GetFeed)-based. Same fluent surface plus .withIgnition(), .withDriverAttribution(), .drivingSpeedThreshold(kmh), .startingFrom(date). Default pollEvery(5000); hard floor 1000ms; soft warning < 2000ms. Bearing computed via atan2 between consecutive LogRecord points (null on the first observation per device, holds steady when stationary). isDriving = ignition-on AND speed > threshold (or speed-only if ignition unknown). Driver field tracked via DriverChange (type 'Driver'). Use for high-fidelity / every-fix tracking.
 - sdk.history({ deviceId, from, to, include: { gps?, trips?, faults?, diagnostics?: [ids] }, computeBearing? }) — single multiCall, auto-paginated GPS.

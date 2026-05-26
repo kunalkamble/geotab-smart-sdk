@@ -1,5 +1,11 @@
 # geotab-smart-sdk
 
+[![npm](https://img.shields.io/npm/v/geotab-smart-sdk?color=cb3837&logo=npm)](https://www.npmjs.com/package/geotab-smart-sdk)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A518-43853d?logo=node.js&logoColor=white)](#requirements)
+[![Docs](https://img.shields.io/badge/docs-live-0F6E56)](https://kunalkamble.github.io/geotab-smart-sdk/)
+[![Deploy](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/kunalkamble/geotab-smart-sdk/actions/workflows/deploy-docs.yml)
+
 A smart, composable Node.js SDK for the [MyGeotab API](https://geotab.github.io/sdk/), built on top of [`mg-api-js`](https://www.npmjs.com/package/mg-api-js).
 
 `geotab-smart-sdk` doesn't hide the underlying API — it answers the questions that slow developers down the first time they touch MyGeotab:
@@ -27,6 +33,8 @@ It ships use-case helpers (`liveTracker`, `history`, `fleetSnapshot`, `feeds`), 
 - [Diagnostic constants](#diagnostic-constants)
 - [API reference](#api-reference)
 - [Lifecycle, errors, and rate limits](#lifecycle-errors-and-rate-limits)
+- [Filtering by group](#filtering-by-group)
+- [Read-only mode](#read-only-mode)
 - [Raw API access](#raw-api-access)
 - [What this SDK handles for you](#what-this-sdk-handles-for-you)
 - [GetFeed: critical rules from Geotab docs](#getfeed-critical-rules-from-geotab-docs)
@@ -392,6 +400,7 @@ DiagnosticLabels['DiagnosticFuelLevelId'];  // 'fuel level'
 | `credentials.sessionId` | `string` | Resume an existing MyGeotab session (valid up to 14 days). If both `password` and `sessionId` are supplied, `mg-api-js` tries the session first and falls back to the password |
 | `credentials.server`    | `string` | Defaults to `my.geotab.com` |
 | `options.cacheTtlMs`    | `number` | `EntityCache` TTL. Defaults to 1 hour |
+| `options.readOnly`      | `boolean` | If `true`, the SDK rejects any non-`Get*` method (`Set`, `Add`, `Remove`, `Execute*`, …) with a `ReadOnlyViolation`. Defaults to `false`. |
 
 ### Instance methods
 
@@ -521,6 +530,30 @@ The Geotab search shape varies by entity if you're writing raw `sdk.call()` code
 
 ---
 
+## Read-only mode
+
+The SDK by default forwards any JSON-RPC method you pass to `sdk.call()` or `sdk.multiCall()` — including mutations (`Set`, `Add`, `Remove`, `Execute*`). For sandboxed UIs, demos, or any environment that must *never* mutate fleet data, opt into read-only mode:
+
+```js
+const sdk = new GeotabSDK(
+  { username, password, database },
+  { readOnly: true }
+);
+
+await sdk.call('Get', { typeName: 'Device' });   // ✓ allowed
+await sdk.call('Set', { typeName: 'Group' });    // ✗ throws ReadOnlyViolation
+await sdk.multiCall([
+  ['Get', { typeName: 'Device' }],
+  ['Add', { typeName: 'Device', entity: {...} }],  // ✗ throws — the whole batch is rejected
+]);
+```
+
+The check is a `Get*` allowlist applied **before** the HTTP request leaves the process. It covers `Get`, `GetFeed`, `GetCountOf`, `GetFeedCountOf`, `GetSession`, `GetVersion`, and any future `Get*`-prefixed method. The thrown error carries `code: 'ReadOnlyViolation'` and `method: '<the rejected name>'` so callers can surface it cleanly.
+
+All built-in helpers (`liveTracker`, `realtimeTracker`, `history`, `fleetSnapshot`, `feeds`, `connect`) only issue `Get*` calls, so they work transparently in read-only mode.
+
+---
+
 ## Raw API access
 
 The SDK never hides the underlying API. Reach for `call()` / `multiCall()` whenever the helpers don't cover what you need:
@@ -606,7 +639,17 @@ geotab-smart-sdk/
 
 ## Examples
 
-Runnable examples live in [`examples/`](examples/). Each reads credentials from the environment:
+Three ways to explore:
+
+**1. Browser-based inspector & playground** — no install required:
+
+→ **[kunalkamble.github.io/geotab-smart-sdk](https://kunalkamble.github.io/geotab-smart-sdk/)**
+
+A static site that walks the SDK surface case by case, compares against raw `mg-api-js`, and includes a **Playground** where you plug in your own MyGeotab credentials, pick a mode (live tracker / realtime / fleet snapshot / history), and watch results in a table or on a Leaflet map. The Playground runs in **read-only mode** — it can only issue `Get*` calls.
+
+**2. Runnable Node examples**
+
+Source under [`examples/`](examples/). Each reads credentials from the environment:
 
 ```bash
 export GEOTAB_USER='user@company.com'
@@ -614,9 +657,16 @@ export GEOTAB_PASS='secret'
 export GEOTAB_DB='my_company'
 
 node examples/live-tracking.js
+node examples/realtime-tracking.js
 node examples/historical-gps-diagnostics.js
 node examples/fleet-snapshot.js
 node examples/continuous-feed-sync.js
+```
+
+**3. Local docs site** (if you want to run the inspector against in-development SDK source):
+
+```bash
+cd docs && npm install && npm run dev
 ```
 
 ---
