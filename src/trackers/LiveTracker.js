@@ -1,7 +1,6 @@
 'use strict';
 
 const EventEmitter = require('events');
-const { Diagnostics } = require('../constants/Diagnostics');
 
 const DEFAULT_POLL_MS = 5_000;
 
@@ -154,7 +153,7 @@ class LiveTracker extends EventEmitter {
         () => this._session.multiCall(calls)
       );
 
-      const vehicles = this._mergeResults(results, calls);
+      const vehicles = this._mergeResults(results);
       this.emit('update', vehicles);
     } catch (err) {
       this.emit('error', err);
@@ -190,7 +189,7 @@ class LiveTracker extends EventEmitter {
     return calls;
   }
 
-  _mergeResults(results, calls) {
+  _mergeResults(results) {
     // results[0] = DeviceStatusInfo[]
     let statuses = results[0] ?? [];
 

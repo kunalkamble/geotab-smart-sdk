@@ -263,7 +263,7 @@ class RealtimeTracker extends EventEmitter {
 
   _merge(results, calls) {
     // Index results by role
-    let logRaw = results[0];
+    const logRaw = results[0];
     let ignitionRecords = [];
     const diagRecords = {};
     let faultRecords = [];

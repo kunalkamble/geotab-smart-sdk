@@ -125,12 +125,12 @@ class FleetSnapshot {
 
     const results = await this._session.multiCall(calls);
 
-    return this._assemble(results, callMap, options);
+    return this._assemble(results, callMap);
   }
 
   // ─── Private ─────────────────────────────────────────────────────────────
 
-  _assemble(results, callMap, options) {
+  _assemble(results, callMap) {
     let deviceList     = [];
     const liveMap      = new Map();
     const faultMap     = new Map();

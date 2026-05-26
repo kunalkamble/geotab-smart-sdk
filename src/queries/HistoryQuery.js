@@ -1,7 +1,5 @@
 'use strict';
 
-const { Diagnostics } = require('../constants/Diagnostics');
-
 const PAGE_SIZE = 50_000;
 
 /**

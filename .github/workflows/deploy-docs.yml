@@ -10,6 +10,11 @@ permissions:
   pages: write
   id-token: write
 
+# Opt in to Node.js 24 for all JS-based actions ahead of the June 2026 default
+# switch. Silences the "Node.js 20 actions are deprecated" warning.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 # Allow one concurrent deployment; cancel in-progress runs that have been
 # superseded by a newer push (the latest commit is what should ship).
 concurrency:
@@ -50,6 +55,11 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          # Enable Pages programmatically on the first run so we don't have to
+          # toggle it manually in repo Settings. Requires `pages: write` permission
+          # (already granted above).
+          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

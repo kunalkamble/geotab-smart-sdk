@@ -60,7 +60,7 @@ class FeedManager extends EventEmitter {
       entityType,
       fromVersion:  options.fromVersion ?? null,
       fromDate:     options.fromDate ?? null,     // used once, then discarded
-      seeded:       !!options.fromVersion,        // if we have a token, skip fromDate
+      seeded:       Boolean(options.fromVersion),  // if we have a token, skip fromDate
       resultsLimit: options.resultsLimit ?? DEFAULT_RESULTS_LIMIT,
       extraSearch:  options.search ?? {},
       pollIntervalMs: MIN_POLL_INTERVAL_MS,

@@ -54,7 +54,7 @@ class EntityCache {
    */
   isFresh(entityType) {
     const store = this._stores.get(entityType);
-    return !!store && !this._isStale(store);
+    return Boolean(store) && !this._isStale(store);
   }
 
   /**
