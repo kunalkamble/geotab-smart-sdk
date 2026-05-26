@@ -440,6 +440,51 @@ For `LiveTracker` / `FeedManager`, listen for the `'error'` event — these are 
 
 ---
 
+## Filtering by group
+
+The Geotab API supports group-based filtering on every entity that has a device association. The SDK's coverage today is uneven — first-class support is being added one helper at a time. Here's the current state and the workaround for each.
+
+| Helper | Group filter today | Status |
+|---|---|---|
+| `sdk.fleetSnapshot({ groupIds })` | Partial | Applied to `Device` and `DeviceStatusInfo` only. `StatusData`, `FaultData`, and `Trip` are fetched fleet-wide and keyed back to filtered devices on the client — correct but over-fetches. |
+| `sdk.liveTracker()` | Workaround | No `.forGroups()` yet. Pre-resolve device IDs and use `.forDevices([ids])`. |
+| `sdk.realtimeTracker()` | Workaround | Same — pre-resolve and use `.forDevices([ids])`. |
+| `sdk.history({ deviceId })` | N/A | Single device by ID. |
+| `sdk.historyMany([ids], options)` | Workaround | Pre-resolve device IDs and pass them in. A `historyByGroups()` helper is planned. |
+| `sdk.feeds()` (GetFeed) | Not supported | GetFeed accepts only `fromDate` per [Geotab's data feed guide](https://geotab.github.io/sdk/software/guides/data-feed/). Filter client-side via the device cache. |
+| `sdk.connect({ cacheDevices })` | Not yet | Caches all devices. A `cacheGroups: [ids]` scoping option is planned. |
+
+### Workaround: resolve devices, then call the helper
+
+```js
+// 1. Resolve the group → device IDs once
+const devices = await sdk.call('Get', {
+  typeName: 'Device',
+  search: { groups: [{ id: 'groupCompanyId' }] },
+});
+const ids = devices.map(d => d.id);
+
+// 2. Pass to whichever helper needs it
+sdk.liveTracker().forDevices(ids).withFaults().pollEvery(5_000).start();
+
+await sdk.historyMany(ids, {
+  from: yesterday, to: today,
+  include: { gps: true, faults: true },
+});
+```
+
+The Geotab search shape varies by entity if you're writing raw `sdk.call()` code:
+
+```js
+// Device, DeviceStatusInfo — groups at the top level
+{ search: { groups: [{ id: 'groupCompanyId' }] } }
+
+// StatusData, FaultData, Trip, LogRecord — groups nested in deviceSearch
+{ search: { deviceSearch: { groups: [{ id: 'groupCompanyId' }] } } }
+```
+
+---
+
 ## Raw API access
 
 The SDK never hides the underlying API. Reach for `call()` / `multiCall()` whenever the helpers don't cover what you need:

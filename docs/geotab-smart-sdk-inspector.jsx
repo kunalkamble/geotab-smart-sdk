@@ -54,6 +54,7 @@ console.log(fleet.summary);`,
       { type: "tip",  text: "Each poll is a single multiCall: DeviceStatusInfo + StatusData × N + FaultData. No extra round-trips." },
       { type: "info", text: "Bearing comes from DeviceStatusInfo (the only object that has it). The SDK picks the right object for you." },
       { type: "warn", text: "Builder methods return `this`. Don't forget the trailing .start() — the tracker doesn't poll until you call it." },
+      { type: "info", text: "Group filtering isn't a builder yet. Pre-resolve device IDs via sdk.call('Get', { typeName: 'Device', search: { groups: [{ id }] } }) and pass them via .forDevices()." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
 const sdk = new GeotabSDK({ /* ... */ });
@@ -104,6 +105,7 @@ tracker.stop();`,
       { type: "info", text: "Bearing is computed via atan2 between consecutive LogRecords. It's null on the first observation per device, then holds steady when stationary." },
       { type: "warn", text: "isDriving depends on ignition state — call .withIgnition() unless a speed-only heuristic is fine for your use case." },
       { type: "info", text: "5s poll uses ~12/min of the 60/min GetFeed limit on LogRecord. Hard floor 1000 ms; below 2000 ms emits a console warning." },
+      { type: "info", text: "Group filtering isn't a builder yet. Pre-resolve device IDs via sdk.call('Get', { typeName: 'Device', search: { groups: [{ id }] } }) and pass them via .forDevices()." },
     ],
     code: `const { GeotabSDK, Diagnostics } = require('geotab-smart-sdk');
 const sdk = new GeotabSDK({ /* ... */ });
@@ -189,7 +191,7 @@ const results = await sdk.historyMany(['b1', 'b2', 'b3'], {
       { name: "include.activeFaults", highlight: false, note: "Active DTCs per vehicle" },
       { name: "include.diagnostics", highlight: false, note: "Latest StatusData per Diagnostic ID per vehicle" },
       { name: "include.recentTrips", highlight: false, note: "N most recent trips per vehicle (last 7 days)" },
-      { name: "groupIds", highlight: false, note: "Optional — restrict to specific groups" },
+      { name: "groupIds", highlight: false, note: "Partial today: filters Device + liveStatus only. activeFaults / diagnostics / recentTrips fetch fleet-wide and key back client-side." },
       { name: ".summary", highlight: true, note: "Pre-computed counts: total / driving / stopped / disconnected / withActiveFaults" },
     ],
     gotchas: [
@@ -478,6 +480,7 @@ const HELPER_MATRIX = [
   { capability: "Trips",                    liveTracker: "—",                     realtimeTracker: "—",                     history: "include.trips",           fleetSnapshot: "recentTrips",   feeds: "Trip" },
   { capability: "Fleet summary counts",     liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "✓ .summary",    feeds: "—" },
   { capability: "Continuous sync",          liveTracker: "—",                     realtimeTracker: "—",                     history: "—",                       fleetSnapshot: "—",             feeds: "✓ adaptive" },
+  { capability: "Filter by group",          liveTracker: "via forDevices",        realtimeTracker: "via forDevices",        history: "via historyMany",         fleetSnapshot: "groupIds (partial)", feeds: "—" },
   { capability: "Device names hydrated",    liveTracker: "✓",                     realtimeTracker: "✓",                     history: "—",                       fleetSnapshot: "via cache",     feeds: "—" },
   { capability: "Connectivity state",       liveTracker: "✓ isConnected",         realtimeTracker: "✓ from recency",        history: "—",                       fleetSnapshot: "✓ summary",     feeds: "—" },
 ];
