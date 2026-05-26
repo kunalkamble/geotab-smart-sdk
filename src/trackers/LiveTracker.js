@@ -217,10 +217,32 @@ class LiveTracker extends EventEmitter {
     // results[0] = DeviceStatusInfo[]
     let statuses = results[0] ?? [];
 
-    // Filter to requested devices if specified
-    if (this._deviceIds.length > 0) {
-      const idSet = new Set(this._deviceIds);
-      statuses = statuses.filter(s => idSet.has(s.device?.id));
+    // Client-side filters. We always apply these — even when forGroups()
+    // already added a server-side group filter to the search — because
+    // DeviceStatusInfo's `groups` filter is not reliably honored across
+    // Geotab tenants and can return the full fleet anyway. The device
+    // cache (warmed by sdk.connect({ cacheDevices: true })) carries each
+    // device's `groups` array, which is the source of truth.
+    const deviceCache    = this._cache.getAll('Device');
+    const deviceIdSet    = this._deviceIds.length > 0 ? new Set(this._deviceIds) : null;
+    const allowedGroups  = this._groupIds.length > 0  ? new Set(this._groupIds)  : null;
+    if (deviceIdSet || allowedGroups) {
+      statuses = statuses.filter((s) => {
+        const devId = s.device?.id;
+        if (!devId) return false;
+        if (deviceIdSet && !deviceIdSet.has(devId)) return false;
+        if (allowedGroups) {
+          const dev = deviceCache?.get(devId);
+          // Unknown-to-cache devices are dropped to avoid leaking out-of-scope
+          // vehicles — the device cache is warmed in start() before the first
+          // poll, so this only matters for vehicles added after start.
+          if (!dev) return false;
+          if (!Array.isArray(dev.groups) || !dev.groups.some(g => allowedGroups.has(g?.id))) {
+            return false;
+          }
+        }
+        return true;
+      });
     }
 
     // Build lookup maps for diagnostics
@@ -253,9 +275,7 @@ class LiveTracker extends EventEmitter {
       }
     }
 
-    // Hydrate device names from cache
-    const deviceCache = this._cache.getAll('Device');
-
+    // Hydrate device names from the cache we already read above.
     return statuses.map(s => {
       const deviceId  = s.device?.id;
       const devRecord = deviceCache?.get(deviceId) || s.device;

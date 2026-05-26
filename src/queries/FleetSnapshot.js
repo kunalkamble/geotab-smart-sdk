@@ -128,12 +128,12 @@ class FleetSnapshot {
 
     const results = await this._session.multiCall(calls);
 
-    return this._assemble(results, callMap);
+    return this._assemble(results, callMap, groupIds);
   }
 
   // ─── Private ─────────────────────────────────────────────────────────────
 
-  _assemble(results, callMap) {
+  _assemble(results, callMap, groupIds = []) {
     let deviceList     = [];
     const liveMap      = new Map();
     const faultMap     = new Map();
@@ -182,6 +182,30 @@ class FleetSnapshot {
           const sorted = trips.sort((a, b) => new Date(b.stop) - new Date(a.stop));
           tripMap.set(devId, sorted.slice(0, role.limit));
         }
+      }
+    }
+
+    // Client-side group filter — Geotab's `groups` filter on DeviceStatusInfo /
+    // StatusData / FaultData / Trip is not reliably honored across tenants, so
+    // a snapshot can come back with vehicles outside the requested groups even
+    // though we asked for them server-side. Trust the device cache (which is
+    // populated by the Device fetch above, or by a prior connect()) as the
+    // source of truth.
+    if (groupIds.length > 0) {
+      const allowed = new Set(groupIds);
+      const cache   = this._cache.getAll('Device');
+      const inScope = (devId) => {
+        if (!devId) return false;
+        const dev = cache?.get(devId);
+        if (!dev) return false;
+        return Array.isArray(dev.groups) && dev.groups.some(g => allowed.has(g?.id));
+      };
+
+      for (const k of [...liveMap.keys()])   if (!inScope(k)) liveMap.delete(k);
+      for (const k of [...faultMap.keys()])  if (!inScope(k)) faultMap.delete(k);
+      for (const k of [...tripMap.keys()])   if (!inScope(k)) tripMap.delete(k);
+      for (const m of Object.values(diagMaps)) {
+        for (const k of [...m.keys()]) if (!inScope(k)) m.delete(k);
       }
     }
 

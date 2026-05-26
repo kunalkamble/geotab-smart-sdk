@@ -445,6 +445,40 @@ check('GeotabSDK extends EventEmitter — sdk.on listeners actually fire', async
   assert.equal(authCalls,      1, 'authenticated listener should have fired');
 });
 
+check('LiveTracker filters DSI client-side by group when device cache is warm', () => {
+  // Simulate a device cache where only b1 is in groupCompanyId; b2 is in some other group.
+  const cache = {
+    getAll: () => new Map([
+      ['b1', { id: 'b1', name: 'Truck-1', groups: [{ id: 'groupCompanyId' }] }],
+      ['b2', { id: 'b2', name: 'Truck-2', groups: [{ id: 'groupOther' }] }],
+    ]),
+  };
+  const t = new sdk.LiveTracker({}, {}, cache);
+  t.forGroups(['groupCompanyId']);
+
+  // DSI returns both vehicles (simulating Geotab's `groups` filter being ignored)
+  const merged = t._mergeResults([
+    [
+      { device: { id: 'b1', name: 'Truck-1' }, latitude: 1, longitude: 1, bearing: 90, speed: 10, isDriving: true, isDeviceCommunicating: true, dateTime: '2024-01-01T00:00:00Z' },
+      { device: { id: 'b2', name: 'Truck-2' }, latitude: 2, longitude: 2, bearing: 180, speed: 0, isDriving: false, isDeviceCommunicating: true, dateTime: '2024-01-01T00:00:00Z' },
+    ],
+  ]);
+  assert.equal(merged.length, 1, 'should keep only b1 (in groupCompanyId)');
+  assert.equal(merged[0].device.id, 'b1');
+});
+
+check('LiveTracker without forGroups returns all DSI results', () => {
+  const cache = { getAll: () => null };
+  const t = new sdk.LiveTracker({}, {}, cache);
+  const merged = t._mergeResults([
+    [
+      { device: { id: 'b1' }, latitude: 1, longitude: 1, dateTime: '2024-01-01T00:00:00Z' },
+      { device: { id: 'b2' }, latitude: 2, longitude: 2, dateTime: '2024-01-01T00:00:00Z' },
+    ],
+  ]);
+  assert.equal(merged.length, 2);
+});
+
 check('HistoryQuery._paginate dedupes by id across page boundaries', async () => {
   const hq = new sdk.HistoryQuery({}, {});
   // Fake first page hitting the size limit exactly. Records share a boundary
