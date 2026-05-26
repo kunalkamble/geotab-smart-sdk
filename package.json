@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "test": "node test/smoke.js",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "release": "node scripts/release.js"
   },
   "keywords": [
     "geotab",
