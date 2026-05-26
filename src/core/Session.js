@@ -18,23 +18,40 @@ const EventEmitter = require('./EventEmitter');
  */
 class Session extends EventEmitter {
   /**
-   * @param {object} credentials
-   * @param {string} credentials.username
-   * @param {string} credentials.password
-   * @param {string} credentials.database
-   * @param {string} [credentials.server]  Defaults to 'my.geotab.com'
+   * @param {object}  credentials
+   * @param {string}  credentials.username
+   * @param {string}  credentials.database
+   * @param {string}  [credentials.password]   Required unless `sessionId` is provided.
+   * @param {string}  [credentials.sessionId]  Resume an existing MyGeotab session (valid up to 14 days).
+   *                                            If both `password` and `sessionId` are supplied, mg-api-js
+   *                                            tries the sessionId first and falls back to password.
+   * @param {string}  [credentials.server]      Defaults to 'my.geotab.com'.
    */
-  constructor(credentials) {
+  /**
+   * @param {object}  credentials  (see class JSDoc)
+   * @param {object}  [options]
+   * @param {boolean} [options.readOnly=false]  If true, reject any method that
+   *                                            isn't a `Get*` call. Useful for
+   *                                            sandboxed UIs (e.g. our Playground)
+   *                                            that must never mutate.
+   */
+  constructor(credentials, options = {}) {
     super();
 
-    if (!credentials || !credentials.username || !credentials.password || !credentials.database) {
-      throw new Error('[GeotabSDK] credentials must include username, password, and database');
+    if (!credentials || !credentials.username || !credentials.database) {
+      throw new Error('[GeotabSDK] credentials must include username and database');
+    }
+    if (!credentials.password && !credentials.sessionId) {
+      throw new Error('[GeotabSDK] credentials must include either password or sessionId');
     }
 
-    this._credentials = credentials;
+    // Defensive copy so external mutation doesn't surprise us.
+    this._credentials = { ...credentials };
     this._api = null;
     this._authenticated = false;
     this._authPromise = null;
+    this._session = null;     // captured from api.getSession() after auth
+    this._readOnly = Boolean(options.readOnly);
   }
 
   // ─── Public ──────────────────────────────────────────────────────────────
@@ -60,6 +77,7 @@ class Session extends EventEmitter {
    * @returns {Promise<any>}
    */
   async call(method, params) {
+    this._assertAllowed(method);
     await this.connect();
     try {
       return await this._api.call(method, params);
@@ -67,6 +85,10 @@ class Session extends EventEmitter {
       if (this._isSessionExpired(err)) {
         this.emit('session:expired');
         this._authenticated = false;
+        // Drop the stale sessionId so the next authenticate() uses the
+        // password if one was supplied. If only a sessionId was provided,
+        // the re-auth will surface a clear error.
+        this._credentials.sessionId = null;
         await this.connect();
         return this._api.call(method, params);
       }
@@ -82,6 +104,11 @@ class Session extends EventEmitter {
    * @returns {Promise<any[]>}
    */
   async multiCall(calls) {
+    if (Array.isArray(calls)) {
+      for (const entry of calls) {
+        if (Array.isArray(entry) && entry.length > 0) this._assertAllowed(entry[0]);
+      }
+    }
     await this.connect();
     try {
       return await this._api.multiCall(calls);
@@ -89,6 +116,10 @@ class Session extends EventEmitter {
       if (this._isSessionExpired(err)) {
         this.emit('session:expired');
         this._authenticated = false;
+        // Drop the stale sessionId so the next authenticate() uses the
+        // password if one was supplied. If only a sessionId was provided,
+        // the re-auth will surface a clear error.
+        this._credentials.sessionId = null;
         await this.connect();
         return this._api.multiCall(calls);
       }
@@ -99,22 +130,82 @@ class Session extends EventEmitter {
   // ─── Private ─────────────────────────────────────────────────────────────
 
   async _authenticate() {
-    const { username, password, database, server } = this._credentials;
+    const { username, password, database, server, sessionId } = this._credentials;
+
+    // Build mg-api-js credentials. sessionId takes precedence; if it's expired
+    // mg-api-js falls back to password (when both are present).
+    const apiCredentials = { userName: username, database };
+    if (password)  apiCredentials.password  = password;
+    if (sessionId) apiCredentials.sessionId = sessionId;
 
     this._api = new GeotabApi({
-      credentials: { userName: username, password, database },
+      credentials: apiCredentials,
       path: server || 'my.geotab.com',
     }, {
-      rememberMe: true,   // SDK handles token refresh internally
+      rememberMe: true,   // SDK handles credential renewal internally
       timeout: 30,
     });
 
-    // mg-api-js authenticates lazily on first call; force it now so
-    // we surface auth errors at connect() time rather than later.
-    await this._api.call('Get', { typeName: 'SystemSettings', resultsLimit: 1 });
+    // mg-api-js authenticates lazily on the first .call(). Force it now via
+    // its explicit authenticate() method so we surface auth errors at
+    // connect() time rather than at a later call. This is one HTTP request;
+    // the previous "Get SystemSettings" warm-up made it two for no reason.
+    await this._api.authenticate();
+
+    // Capture the live session info (mg-api-js may have renewed the sessionId)
+    // for persistence by consumers — e.g. saving to localStorage so the next
+    // page load can reconnect without re-entering a password.
+    let captured = null;
+    try {
+      const result = await this._api.getSession();
+      captured = {
+        sessionId: result?.credentials?.sessionId ?? sessionId ?? null,
+        userName:  result?.credentials?.userName  ?? username,
+        database:  result?.credentials?.database  ?? database,
+        server:    result?.path                   ?? server ?? 'my.geotab.com',
+      };
+    } catch {
+      // getSession failed — not fatal, we just won't expose a session.
+      captured = null;
+    }
+    this._session = captured;
 
     this._authenticated = true;
     this.emit('session:connected', { database, server });
+    if (captured?.sessionId) {
+      // Emit a richer event for consumers that want to persist the session.
+      this.emit('session:authenticated', { ...captured });
+    }
+  }
+
+  /**
+   * Returns the current MyGeotab session — `{ sessionId, userName, database, server }`
+   * — or `null` if the session has not been authenticated yet (or getSession
+   * failed). The shape is safe to persist for up to 14 days.
+   */
+  getSession() {
+    return this._session ? { ...this._session } : null;
+  }
+
+  /**
+   * Enforce read-only mode when enabled. The Playground (and any other
+   * sandboxed UI that explicitly opts in) passes `{ readOnly: true }` to
+   * guarantee that no mutation can sneak through `sdk.call()` or
+   * `sdk.multiCall()`. The check is a simple `Get*` allowlist:
+   *   Get, GetFeed, GetCountOf, GetFeedCountOf, GetSession, ...
+   * — anything starting with "Get".
+   */
+  _assertAllowed(method) {
+    if (!this._readOnly) return;
+    if (typeof method !== 'string' || !method.startsWith('Get')) {
+      const err = new Error(
+        `[GeotabSDK] readOnly mode rejected method "${method}". ` +
+        `Only Get*-style methods are allowed in this SDK instance.`
+      );
+      err.code = 'ReadOnlyViolation';
+      err.method = method;
+      throw err;
+    }
   }
 
   _isSessionExpired(err) {

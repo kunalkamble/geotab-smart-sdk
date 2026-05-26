@@ -67,6 +67,38 @@ await sdk.connect({ cacheDevices: true });
 // or just sdk.call() / sdk.multiCall() for anything else.
 ```
 
+### Resuming with a session ID (skip the password)
+
+A MyGeotab session is valid for **up to 14 days**. After a successful `connect()` you can capture the session and reuse it later — no password needed on subsequent runs:
+
+```js
+// First run — auth with password, then save the session
+const sdk = new GeotabSDK({ username, password, database });
+await sdk.connect();
+
+const session = sdk.getSession();
+// → { sessionId, userName, database, server }
+fs.writeFileSync('mygeotab-session.json', JSON.stringify(session));
+
+// Next run (or after a restart) — auth with the saved sessionId
+const saved = JSON.parse(fs.readFileSync('mygeotab-session.json', 'utf8'));
+const sdk2 = new GeotabSDK({
+  username:  saved.userName,
+  database:  saved.database,
+  sessionId: saved.sessionId,    // password not required
+  server:    saved.server,
+});
+await sdk2.connect();
+```
+
+If the saved `sessionId` has expired (or the password changed), `connect()` will throw `InvalidUserException`. Catch it and prompt for a fresh password. If you pass *both* `password` and `sessionId`, `mg-api-js` tries the session first and falls back to the password automatically.
+
+For long-running processes, listen for the `authenticated` event to persist the session each time it's refreshed:
+
+```js
+sdk.on?.('authenticated', (session) => persist(session));
+```
+
 ---
 
 ## Use cases
@@ -354,17 +386,19 @@ DiagnosticLabels['DiagnosticFuelLevelId'];  // 'fuel level'
 
 | Field | Type | Description |
 |---|---|---|
-| `credentials.username` | `string` | **required** |
-| `credentials.password` | `string` | **required** |
-| `credentials.database` | `string` | **required** |
-| `credentials.server`   | `string` | Defaults to `my.geotab.com` |
-| `options.cacheTtlMs`   | `number` | `EntityCache` TTL. Defaults to 1 hour |
+| `credentials.username`  | `string` | **required** |
+| `credentials.database`  | `string` | **required** |
+| `credentials.password`  | `string` | Required **unless** `sessionId` is provided |
+| `credentials.sessionId` | `string` | Resume an existing MyGeotab session (valid up to 14 days). If both `password` and `sessionId` are supplied, `mg-api-js` tries the session first and falls back to the password |
+| `credentials.server`    | `string` | Defaults to `my.geotab.com` |
+| `options.cacheTtlMs`    | `number` | `EntityCache` TTL. Defaults to 1 hour |
 
 ### Instance methods
 
 | Method | Returns | Notes |
 |---|---|---|
 | `connect({ cacheDevices?, cacheGroups?, cacheDiagnostics? })` | `Promise<void>` | Authenticates and optionally warms caches. `cacheGroups: [ids]` scopes the device cache to specific groups (and implies `cacheDevices`). Safe to call multiple times. |
+| `getSession()` | `{ sessionId, userName, database, server } \| null` | Returns the active MyGeotab session after `connect()` — persist this to skip the password on the next run. `null` until authenticated. |
 | `call(method, params)` | `Promise<any>` | Direct MyGeotab call with auto re-auth. |
 | `multiCall(calls)` | `Promise<any[]>` | Batched calls, preserves order. |
 | `liveTracker()` | `LiveTracker` | DeviceStatusInfo snapshot tracker — see [§1a](#1a-sdklivetracker--devicestatusinfo-snapshot). |

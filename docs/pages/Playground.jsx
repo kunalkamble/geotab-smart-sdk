@@ -33,46 +33,59 @@ const MODES = [
   },
 ];
 
-const STORAGE_KEY = 'geotab-playground-creds';
+// We persist the *sessionId* from a successful auth — never the password.
+// A MyGeotab session is valid for up to 14 days, so this lets the Playground
+// auto-reconnect across page reloads without touching credentials again.
+const SESSION_STORAGE_KEY = 'geotab-playground-session';
 
-function loadCreds() {
+function loadStoredSession() {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY)
+             || sessionStorage.getItem(SESSION_STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
-function saveCreds(creds, remember) {
+function saveStoredSession(session, persist) {
   try {
-    const store = remember ? localStorage : sessionStorage;
-    store.setItem(STORAGE_KEY, JSON.stringify(creds));
+    const store = persist ? localStorage : sessionStorage;
+    store.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+    // Make sure the other store doesn't keep a stale copy.
+    (persist ? sessionStorage : localStorage).removeItem(SESSION_STORAGE_KEY);
   } catch {}
 }
 
-function clearStoredCreds() {
+function clearStoredSession() {
   try {
-    sessionStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
   } catch {}
 }
 
 export default function Playground() {
   const [sdk, setSdk] = useState(null);
-  const [creds, setCreds] = useState(() => loadCreds() ?? {
-    username: '',
+  // Pre-fill the modal with the stored session's userName/database/server
+  // (the sessionId is used for auto-resume below, not shown in the form).
+  const stored = loadStoredSession();
+  const [creds, setCreds] = useState({
+    username: stored?.userName ?? '',
     password: '',
-    database: '',
-    server:   'my.geotab.com',
+    database: stored?.database ?? '',
+    server:   stored?.server   ?? 'my.geotab.com',
   });
-  const [remember, setRemember]   = useState(false);
+  const [remember, setRemember]   = useState(!!stored);
   const [connecting, setConnecting] = useState(false);
   const [error, setError]         = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [resuming, setResuming]   = useState(!!stored?.sessionId);
 
   const [mode, setMode]           = useState('realtime');
   const [running, setRunning]     = useState(false);
   const [vehicles, setVehicles]   = useState([]);
   const [view, setView]           = useState('table');
+  // Optional, comma-separated. Applies to realtimeTracker / liveTracker / fleetSnapshot.
+  // (Not applicable to "history" — that's per-device by ID.)
+  const [groupIdsInput, setGroupIdsInput] = useState('');
   const [historyDeviceId, setHistoryDeviceId] = useState('');
   const [historyFrom, setHistoryFrom] = useState(() => {
     const d = new Date();
@@ -90,6 +103,36 @@ export default function Playground() {
 
   // Clean up active tracker on unmount or mode change
   useEffect(() => () => stopTracker(), []);
+
+  // Auto-resume on mount if we have a stored session.
+  // A MyGeotab session is valid up to 14 days, so this lets the user pick
+  // back up where they left off after a refresh / new browser tab.
+  useEffect(() => {
+    const session = loadStoredSession();
+    if (!session?.sessionId) return;
+
+    (async () => {
+      try {
+        const instance = new GeotabSDK({
+          username:  session.userName,
+          database:  session.database,
+          sessionId: session.sessionId,
+          server:    session.server,
+        }, { readOnly: true });   // Playground is read-only by policy
+        await instance.connect({ cacheDevices: true });
+        // mg-api-js may have refreshed the sessionId — save the latest.
+        const fresh = instance.getSession();
+        if (fresh) saveStoredSession(fresh, true);
+        setSdk(instance);
+      } catch {
+        // Stored session was rejected (expired, password changed, etc.) —
+        // wipe it and fall through to the empty state / modal.
+        clearStoredSession();
+      } finally {
+        setResuming(false);
+      }
+    })();
+  }, []);
 
   // Esc key closes the modal
   useEffect(() => {
@@ -116,9 +159,11 @@ export default function Playground() {
         password: creds.password,
         database: creds.database,
         server:   creds.server || 'my.geotab.com',
-      });
+      }, { readOnly: true });   // Playground is read-only by policy
       await instance.connect({ cacheDevices: true });
-      saveCreds(creds, remember);
+      // Persist the *session* — never the password.
+      const session = instance.getSession();
+      if (session) saveStoredSession(session, remember);
       setSdk(instance);
       setModalOpen(false);
     } catch (err) {
@@ -134,7 +179,10 @@ export default function Playground() {
     setVehicles([]);
     setRunning(false);
     setError(null);
-    if (!remember) clearStoredCreds();
+    // Always clear stored session on explicit disconnect — leaving an
+    // unowned sessionId around defeats the point of pressing this button.
+    clearStoredSession();
+    setCreds((c) => ({ ...c, password: '' }));
   }
 
   async function startMode() {
@@ -142,6 +190,12 @@ export default function Playground() {
     stopTracker();
     setError(null);
     setVehicles([]);
+
+    // Parse the comma-separated groupIds input into a clean array.
+    const groupIds = groupIdsInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     try {
       if (mode === 'realtime') {
@@ -151,6 +205,7 @@ export default function Playground() {
           .withDriverAttribution()
           .withFaults()
           .pollEvery(5000);
+        if (groupIds.length) t.forGroups(groupIds);
         t.on('update', (vs) => setVehicles(vs));
         t.on('error',  (err) => setError(prettyError(err)));
         trackerRef.current = t;
@@ -161,6 +216,7 @@ export default function Playground() {
           .withDiagnostics([Diagnostics.FUEL_LEVEL, Diagnostics.ODOMETER])
           .withFaults()
           .pollEvery(5000);
+        if (groupIds.length) t.forGroups(groupIds);
         t.on('update', (vs) => setVehicles(vs));
         t.on('error',  (err) => setError(prettyError(err)));
         trackerRef.current = t;
@@ -175,6 +231,7 @@ export default function Playground() {
             activeFaults: true,
             diagnostics:  [Diagnostics.FUEL_LEVEL, Diagnostics.ODOMETER],
           },
+          ...(groupIds.length ? { groupIds } : {}),
         });
         setVehicles(snapshotToRows(fleet));
         setRunning(false);
@@ -226,15 +283,28 @@ export default function Playground() {
         </div>
       )}
 
-      {!sdk && (
+      {!sdk && resuming && (
+        <div className="playground-empty">
+          <div className="playground-empty-icon">
+            <i className="ti ti-loader-2 spin" aria-hidden="true" />
+          </div>
+          <h3>Resuming session…</h3>
+          <p>
+            Re-using a stored MyGeotab session (valid up to 14 days). If it has
+            expired, you'll be prompted to sign in again.
+          </p>
+        </div>
+      )}
+
+      {!sdk && !resuming && (
         <div className="playground-empty">
           <div className="playground-empty-icon">
             <i className="ti ti-plug-off" aria-hidden="true" />
           </div>
           <h3>No active connection</h3>
           <p>
-            Enter your MyGeotab credentials to start exploring the SDK. Credentials
-            stay in your browser — never sent anywhere except your Geotab server.
+            Enter your MyGeotab credentials to start exploring the SDK. Your password
+            is never persisted — only a session ID (if you opt in to "keep me signed in").
           </p>
           <button className="btn btn-primary" onClick={() => { setError(null); setModalOpen(true); }}>
             <i className="ti ti-plug" aria-hidden="true" /> Add Connection
@@ -307,7 +377,9 @@ export default function Playground() {
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
                 />
-                <span>Remember on this device (uses localStorage)</span>
+                <span>
+                  Keep me signed in <span className="dim">— stores session ID (not password) for up to 14 days</span>
+                </span>
               </label>
 
               {error && (
@@ -333,8 +405,9 @@ export default function Playground() {
                 <i className="ti ti-shield" aria-hidden="true" />
                 <div>
                   <strong>Use a test account.</strong> This page runs entirely in your
-                  browser — no proxy — and your credentials are stored locally. Do not
-                  enter shared production credentials.
+                  browser — no proxy. The password is sent only to the MyGeotab server
+                  you specify, and is <em>never persisted</em>. If you opt to stay
+                  signed in, only the resulting session ID is stored locally.
                 </div>
               </div>
             </form>
@@ -359,6 +432,24 @@ export default function Playground() {
           </button>
         ))}
       </section>
+
+      {mode !== 'history' && (
+        <section className="filter-row">
+          <label className="filter-row-label">
+            <span>Group IDs <span className="dim">(optional, comma-separated)</span></span>
+            <input
+              type="text"
+              placeholder="groupCompanyId, b3X4..."
+              value={groupIdsInput}
+              onChange={(e) => setGroupIdsInput(e.target.value)}
+            />
+          </label>
+          <div className="filter-row-hint">
+            Restricts the {mode === 'snapshot' ? 'snapshot' : 'tracker'} to devices in these groups.
+            Leave blank to include every device you have access to.
+          </div>
+        </section>
+      )}
 
       {mode === 'history' && (
         <section className="history-form">

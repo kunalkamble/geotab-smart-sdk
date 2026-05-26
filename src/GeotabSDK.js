@@ -40,22 +40,55 @@ const FleetSnapshot = require('./queries/FleetSnapshot');
  */
 class GeotabSDK {
   /**
-   * @param {object} credentials
-   * @param {string} credentials.username
-   * @param {string} credentials.password
-   * @param {string} credentials.database
-   * @param {string} [credentials.server]   Defaults to 'my.geotab.com'
-   * @param {object} [options]
-   * @param {number} [options.cacheTtlMs]   Entity cache TTL (default 1 hour)
+   * @param {object}  credentials
+   * @param {string}  credentials.username
+   * @param {string}  credentials.database
+   * @param {string}  [credentials.password]   Required unless `sessionId` is provided.
+   * @param {string}  [credentials.sessionId]  Resume an existing MyGeotab session (valid up to 14 days).
+   *                                            If both are supplied, the sessionId is tried first.
+   * @param {string}  [credentials.server]     Defaults to 'my.geotab.com'.
+   * @param {object}  [options]
+   * @param {number}  [options.cacheTtlMs]     Entity cache TTL (default 1 hour).
+   * @param {boolean} [options.readOnly=false] If true, the SDK rejects any
+   *                                            method that isn't a `Get*` call
+   *                                            (Get, GetFeed, GetCountOf, …).
+   *                                            Use this for sandboxed UIs that
+   *                                            must never mutate fleet data.
    */
   constructor(credentials, options = {}) {
-    this._session     = new Session(credentials);
+    this._session     = new Session(credentials, { readOnly: options.readOnly });
     this._rateLimiter = new RateLimiter();
     this._cache       = new EntityCache({ ttlMs: options.cacheTtlMs });
 
-    // Forward session lifecycle events for external monitoring
-    this._session.on('session:connected', info => this.emit?.('connected', info));
-    this._session.on('session:expired',   ()   => this.emit?.('reconnecting'));
+    // Forward session lifecycle events for external monitoring.
+    this._session.on('session:connected',     info => this.emit?.('connected', info));
+    this._session.on('session:expired',       ()   => this.emit?.('reconnecting'));
+    this._session.on('session:authenticated', s    => this.emit?.('authenticated', s));
+  }
+
+  /**
+   * Get the current MyGeotab session for persistence.
+   * Returns `{ sessionId, userName, database, server }` after a successful
+   * connect, or `null` if not yet authenticated. The session is valid for
+   * up to 14 days — store it (e.g. in localStorage) and pass `sessionId`
+   * back into the constructor on the next page load to avoid re-entering
+   * a password.
+   *
+   * @returns {{sessionId: string, userName: string, database: string, server: string}|null}
+   *
+   * @example
+   * await sdk.connect();
+   * const session = sdk.getSession();
+   * if (session) localStorage.setItem('mygeotab-session', JSON.stringify(session));
+   *
+   * // ... later, on next page load:
+   * const saved = JSON.parse(localStorage.getItem('mygeotab-session') || 'null');
+   * const sdk = new GeotabSDK(saved
+   *   ? { ...saved }                                  // sessionId-based resume
+   *   : { username, password, database });            // fresh login
+   */
+  getSession() {
+    return this._session.getSession();
   }
 
   // ─── Low-level access ────────────────────────────────────────────────────

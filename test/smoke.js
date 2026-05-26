@@ -40,12 +40,30 @@ check('GeotabSDK constructor rejects missing credentials', () => {
   assert.throws(() => new sdk.GeotabSDK({ username: 'u', password: 'p' }), /database/i);
 });
 
+check('GeotabSDK requires password OR sessionId', () => {
+  assert.throws(
+    () => new sdk.GeotabSDK({ username: 'u', database: 'd' }),
+    /password|sessionId/i,
+  );
+});
+
+check('GeotabSDK accepts sessionId-only credentials (no password)', () => {
+  const inst = new sdk.GeotabSDK({
+    username: 'u', database: 'd', sessionId: 'abc123', server: 'my.geotab.com',
+  });
+  assert.equal(typeof inst.call, 'function');
+  // getSession returns null until connect() succeeds
+  assert.equal(inst.getSession(), null);
+});
+
 const instance = new sdk.GeotabSDK({ username: 'u', password: 'p', database: 'd' });
 
-check('GeotabSDK instance exposes call / multiCall / connect', () => {
+check('GeotabSDK instance exposes call / multiCall / connect / getSession', () => {
   assert.equal(typeof instance.call, 'function');
   assert.equal(typeof instance.multiCall, 'function');
   assert.equal(typeof instance.connect, 'function');
+  assert.equal(typeof instance.getSession, 'function');
+  assert.equal(instance.getSession(), null);  // pre-connect: no session yet
 });
 
 check('factory methods return the right classes', () => {
@@ -344,6 +362,59 @@ check('FleetSnapshot omits group filter when groupIds is empty', async () => {
     assert.equal(params.search.groups, undefined, 'no top-level groups');
     assert.equal(params.search.deviceSearch?.groups, undefined, 'no nested groups');
   }
+});
+
+// ─── Read-only mode ─────────────────────────────────────────────────────────
+
+function makeReadOnly() {
+  const ro = new sdk.GeotabSDK(
+    { username: 'u', password: 'p', database: 'd' },
+    { readOnly: true },
+  );
+  // Replace _api with a no-op so that any call that *does* pass our guard
+  // doesn't try to hit the network.
+  ro._session._api = {
+    call:          async () => null,
+    multiCall:     async () => [],
+    authenticate:  async () => null,
+    getSession:    async () => null,
+  };
+  ro._session._authenticated = true;
+  return ro;
+}
+
+check('readOnly mode rejects writes via .call()', async () => {
+  const ro = makeReadOnly();
+  await assert.rejects(() => ro.call('Set',    { typeName: 'Group' }),  /readOnly/i);
+  await assert.rejects(() => ro.call('Add',    { typeName: 'Device' }), /readOnly/i);
+  await assert.rejects(() => ro.call('Remove', { typeName: 'Device' }), /readOnly/i);
+  await assert.rejects(() => ro.call('ExecuteEdit', {}),                 /readOnly/i);
+});
+
+check('readOnly mode rejects writes inside .multiCall()', async () => {
+  const ro = makeReadOnly();
+  await assert.rejects(
+    () => ro.multiCall([['Get', {}], ['Set', { typeName: 'Group' }]]),
+    /readOnly/i,
+  );
+});
+
+check('readOnly mode allows Get / GetFeed / GetCountOf', async () => {
+  const ro = makeReadOnly();
+  await ro.call('Get',          { typeName: 'Device' });
+  await ro.call('GetFeed',      { typeName: 'LogRecord' });
+  await ro.call('GetCountOf',   { typeName: 'Device' });
+  await ro.multiCall([['Get', {}], ['GetFeed', {}]]);
+});
+
+check('default (no readOnly) allows any method — SDK stays fully capable', async () => {
+  const open = new sdk.GeotabSDK({ username: 'u', password: 'p', database: 'd' });
+  open._session._api = {
+    call: async () => null, multiCall: async () => [], authenticate: async () => null, getSession: async () => null,
+  };
+  open._session._authenticated = true;
+  await open.call('Set', { typeName: 'Group' });
+  await open.call('Add', { typeName: 'Device' });
 });
 
 const total = passed + (process.exitCode === 1 ? 1 : 0); // best-effort total

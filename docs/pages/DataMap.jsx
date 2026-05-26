@@ -36,13 +36,17 @@ export default function DataMap({ rows, mode }) {
   const markersRef = useRef([]);
   const lineRef = useRef(null);
 
-  // Initialise map once
+  // Initialise map once.
+  // We deliberately use the SVG renderer (Leaflet's default) rather than
+  // preferCanvas:true. The canvas renderer can throw "Cannot read properties
+  // of undefined (reading 'clearRect')" when React StrictMode double-mounts
+  // the component in dev — an internal tile/render callback resolves after
+  // map.remove() has nulled the canvas context. SVG layers detach cleanly.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, {
       center: [39.5, -98.35],   // default to roughly mid-USA
       zoom: 4,
-      preferCanvas: true,
     });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -59,12 +63,16 @@ export default function DataMap({ rows, mode }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    // After map.remove() the container is detached from the DOM; skip if so.
+    const container = map.getContainer?.();
+    if (!container || !container.isConnected) return;
 
-    // Clear previous overlays
-    markersRef.current.forEach((m) => m.remove());
+    // Clear previous overlays. Wrap in try/catch in case a previous render's
+    // overlay refs point at layers whose parent map has been torn down.
+    markersRef.current.forEach((m) => { try { m.remove(); } catch {} });
     markersRef.current = [];
     if (lineRef.current) {
-      lineRef.current.remove();
+      try { lineRef.current.remove(); } catch {}
       lineRef.current = null;
     }
 
