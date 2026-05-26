@@ -55,11 +55,9 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          # Enable Pages programmatically on the first run so we don't have to
-          # toggle it manually in repo Settings. Requires `pages: write` permission
-          # (already granted above).
-          enablement: true
+        # Note: do NOT pass `enablement: true` here. GITHUB_TOKEN cannot create
+        # a Pages site — that requires admin scope only a PAT has. Pages must
+        # be enabled once manually in repo Settings → Pages → Source: GitHub Actions.
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
