@@ -155,14 +155,23 @@ class Session extends EventEmitter {
     // Capture the live session info (mg-api-js may have renewed the sessionId)
     // for persistence by consumers — e.g. saving to localStorage so the next
     // page load can reconnect without re-entering a password.
+    //
+    // mg-api-js v3 returns getSession() in two different shapes depending on
+    // its internal cache state:
+    //   • cached path  → { credentials: { sessionId, userName, database }, path }
+    //   • re-auth path → { sessionId, userName, database, password }
+    // (the re-auth path is taken when its internal localStorage cache is
+    // empty — which happens on every first-run because of a double-unwrap
+    // bug in mg-api-js v3.0.2's setLocalCredentials). We read either.
     let captured = null;
     try {
       const result = await this._api.getSession();
+      const creds  = result?.credentials ?? result ?? {};
       captured = {
-        sessionId: result?.credentials?.sessionId ?? sessionId ?? null,
-        userName:  result?.credentials?.userName  ?? username,
-        database:  result?.credentials?.database  ?? database,
-        server:    result?.path                   ?? server ?? 'my.geotab.com',
+        sessionId: creds.sessionId ?? sessionId ?? null,
+        userName:  creds.userName  ?? username,
+        database:  creds.database  ?? database,
+        server:    result?.path    ?? server ?? 'my.geotab.com',
       };
     } catch {
       // getSession failed — not fatal, we just won't expose a session.

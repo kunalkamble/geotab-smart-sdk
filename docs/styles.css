@@ -161,6 +161,18 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Per-route slot in the topbar. Pages portal into this (e.g. Playground's
+ * connection pill). Empty when no page is using it. The first `.app-topbar-link`
+ * still pushes itself + everything after with margin-left:auto, so this slot
+ * sits flush with the title area and never crowds the Sponsor / GitHub links. */
+.app-topbar-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  min-width: 0;
+}
+
 .app-topbar-link {
   margin-left: auto;
   display: inline-flex;
@@ -1010,7 +1022,11 @@ button.app-topbar-link {
   font-size: 12px;
   color: var(--color-text-secondary);
 }
-.form-grid input, .history-form input {
+/* Direct-child selector so we don't double-border the <input class="ms-input">
+ * inside the MultiSelectChips combo box, which already has its own outer
+ * frame via .ms-control. */
+.form-grid > label > input,
+.history-form > label > input {
   background: var(--color-background-primary);
   border: 1px solid var(--color-border-secondary);
   color: var(--color-text-primary);
@@ -1020,7 +1036,8 @@ button.app-topbar-link {
   font-family: var(--font-sans);
   outline: none;
 }
-.form-grid input:focus, .history-form input:focus {
+.form-grid > label > input:focus,
+.history-form > label > input:focus {
   border-color: var(--accent-green-fg);
 }
 
@@ -1068,33 +1085,65 @@ button.app-topbar-link {
   flex-shrink: 0;
 }
 
-.playground-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 14px;
-  background: var(--color-background-secondary);
-  border: 1px solid var(--color-border-tertiary);
-  border-radius: 10px;
-  margin-bottom: 18px;
-}
-.connection-line {
+/* Compact connection pill rendered into the App topbar via portal —
+ * replaces the old full-width .playground-toolbar strip that ate vertical
+ * space at the top of every Playground view. */
+.topbar-connection-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--accent-green-fg);
-  font-size: 13px;
-  margin: 0;
-}
-.connection-line code {
-  font-family: var(--font-mono);
-  color: var(--color-text-primary);
-  background: var(--color-background-primary);
-  padding: 2px 6px;
-  border-radius: 4px;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  background: var(--accent-green-bg);
+  border: 1px solid var(--accent-green-border);
+  border-radius: 999px;
   font-size: 12px;
+  color: var(--accent-green-fg);
+  max-width: 100%;
+}
+.topbar-connection-pill > .ti {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.topbar-connection-db {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-connection-sep { color: var(--color-text-tertiary); }
+.topbar-connection-server {
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-connection-disconnect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  margin-left: 2px;
+}
+.topbar-connection-disconnect:hover {
+  background: rgba(0,0,0,0.06);
+  color: var(--accent-red-fg);
+}
+@media (max-width: 768px) {
+  /* Mobile topbar is already cramped — hide server, keep db + disconnect. */
+  .topbar-connection-server,
+  .topbar-connection-sep { display: none; }
+  .topbar-connection-db { max-width: 100px; }
 }
 
 .page-lede {
@@ -1139,37 +1188,128 @@ button.app-topbar-link {
   gap: 12px;
   margin-bottom: 14px;
   flex-wrap: wrap;
+  align-items: flex-end;
 }
 .history-form label { min-width: 180px; flex: 1; }
+.history-form-device { flex: 2; min-width: 260px; }
 
-.filter-row {
-  margin-bottom: 14px;
+.filter-row { margin-bottom: 14px; }
+.filter-row-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
 }
-.filter-row-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  max-width: 520px;
-}
-.filter-row-label input {
-  background: var(--color-background-primary);
-  border: 1px solid var(--color-border-secondary);
-  color: var(--color-text-primary);
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 13.5px;
-  font-family: var(--font-mono);
-  outline: none;
-}
-.filter-row-label input:focus { border-color: var(--accent-green-fg); }
 .filter-row-hint {
   font-size: 12px;
   color: var(--color-text-tertiary);
-  margin-top: 6px;
-  max-width: 520px;
+  margin-top: 8px;
+  max-width: 720px;
   line-height: 1.5;
+}
+
+/* MultiSelectChips — combo box used for the Groups + Devices filters. */
+.ms-wrap { position: relative; min-width: 0; }
+.ms-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+.ms-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 38px;
+  padding: 4px 6px;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 8px;
+  cursor: text;
+}
+.ms-control.open { border-color: var(--accent-green-fg); }
+.ms-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  background: var(--accent-green-bg);
+  color: var(--accent-green-fg);
+  border: 1px solid var(--accent-green-border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: var(--accent-green-fg);
+  cursor: pointer;
+  border-radius: 999px;
+}
+.ms-chip-x:hover { background: rgba(0,0,0,0.08); }
+.ms-input {
+  flex: 1;
+  min-width: 80px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  padding: 4px 4px;
+  outline: none;
+}
+.ms-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  padding: 4px;
+}
+.ms-dropdown.empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.ms-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+.ms-option.active,
+.ms-option:hover { background: var(--color-background-secondary); }
+.ms-option-name { font-weight: 500; }
+.ms-option-id {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
 }
 
 .run-bar {
@@ -1205,6 +1345,60 @@ button.app-topbar-link {
   background: var(--color-background-primary);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-tertiary);
+}
+
+.snap-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  user-select: none;
+}
+.snap-toggle:hover { color: var(--color-text-primary); }
+.snap-toggle.on {
+  background: var(--accent-green-bg);
+  border-color: var(--accent-green-border);
+  color: var(--accent-green-fg);
+}
+.snap-toggle input[type="checkbox"] {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  margin: 0;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+.snap-toggle.on input[type="checkbox"]::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 4px;
+  height: 8px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.snap-toggle .ti { font-size: 14px; }
+.snap-toggle-hint {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.08);
+  color: inherit;
+  opacity: 0.7;
 }
 
 .run-status {
@@ -1271,9 +1465,16 @@ button.app-topbar-link {
 
 .map-shell { position: relative; }
 .map-container {
-  height: 540px;
+  /* Fill the available viewport — topbar (~52px) + page padding + filter
+   * row + run bar leave ~250-300px of chrome. calc keeps the map filling
+   * the rest of the viewport on tall monitors. Floor of 540px for short
+   * windows so the map never collapses. */
+  height: max(540px, calc(100vh - 320px));
   width: 100%;
   background: var(--color-background-secondary);
+}
+@media (max-width: 768px) {
+  .map-container { height: max(420px, calc(100vh - 380px)); }
 }
 .map-legend {
   position: absolute;
@@ -1292,11 +1493,16 @@ button.app-topbar-link {
 .map-legend i { font-size: 12px; vertical-align: middle; margin-right: 4px; }
 
 .map-marker-wrap { background: none !important; border: none !important; }
-.map-marker { transform: rotate(var(--rot, 0deg)); transform-origin: center; }
+.map-marker {
+  transform: rotate(var(--rot, 0deg));
+  transform-origin: center;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+}
 .trail-dot {
   width: 8px; height: 8px; border-radius: 50%;
-  background: var(--accent-green-fg);
-  border: 1px solid #0008;
+  background: #0A4D3D;
+  border: 1.5px solid #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.35);
 }
 
 /* Dark-mode tile tone-down so OSM doesn't blind users in dark theme */

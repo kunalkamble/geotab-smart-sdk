@@ -131,6 +131,9 @@ export default function App() {
           <div className="app-topbar-title">{active.title}</div>
           <div className="app-topbar-description">{active.description}</div>
         </div>
+        {/* Per-route slot — pages (e.g. Playground) portal connection info
+            here via document.getElementById('app-topbar-slot'). */}
+        <div id="app-topbar-slot" className="app-topbar-slot" />
         <button
           className="app-topbar-link app-topbar-sponsor"
           onClick={() => go('sponsor')}
