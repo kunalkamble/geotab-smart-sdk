@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import pkg from "../package.json";
+import QueryBuilder from "./QueryBuilder.jsx";
 
 const CASES = [
   {
@@ -986,11 +987,12 @@ export default function GeotabSmartSdkInspector() {
   }, [msgs]);
 
   const tabs = [
-    { id: "usecases",  label: "Use cases",    icon: "ti-template" },
-    { id: "helpermap", label: "Helper map",   icon: "ti-table" },
-    { id: "vsraw",     label: "vs raw API",   icon: "ti-arrows-right-left" },
-    { id: "diags",     label: "Diagnostics",  icon: "ti-gauge" },
-    { id: "cheat",     label: "Cheat sheet",  icon: "ti-list-details" },
+    { id: "usecases",  label: "Use cases",     icon: "ti-template" },
+    { id: "builder",   label: "Query builder", icon: "ti-tool" },
+    { id: "helpermap", label: "Helper map",    icon: "ti-table" },
+    { id: "vsraw",     label: "vs raw API",    icon: "ti-arrows-right-left" },
+    { id: "diags",     label: "Diagnostics",   icon: "ti-gauge" },
+    { id: "cheat",     label: "Cheat sheet",   icon: "ti-list-details" },
   ];
 
   const tabStyle = (id) => ({
@@ -1125,6 +1127,11 @@ export default function GeotabSmartSdkInspector() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Query builder ─────────────────────────────────────────────────── */}
+      {tab === "builder" && (
+        <QueryBuilder />
       )}
 
       {/* ── Helper map ────────────────────────────────────────────────────── */}
